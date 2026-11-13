@@ -84,3 +84,17 @@ line below, each followed by text.
 - Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
 - Rule 6: (3 to 15 minute sessions, instant restart) unchanged.
 - Rule 7: (per-player assists) unchanged.
+
+## 2026-11-14 · tenpin-grudge · polish
+- Scope: rework the lane boards over the pins, at Marco's request. No change to physics, scoring, controls or the bot.
+- Kit: as before.
+- Two-player action: unchanged. A versus match on one lane.
+- Hard part: seven boards in one design that still read from the couch. Each is a separate screen: lane badge, bowler, score and a ten-frame strip. Lane 14 follows the match in the bowler's colour; the neighbours' boards follow their own made-up games, which advance as their animated balls land. The kickbacks are lowered so the screens are not cut off.
+- Assists: unchanged.
+- Rule 1: (one shared screen) unchanged; the lane 14 board repeats what the scorecard already shows.
+- Rule 2: (no hidden information) unchanged.
+- Rule 3: (win and lose together) WAIVED by Marco for this slot, as before.
+- Rule 4: (revive, never eliminate) unchanged.
+- Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
+- Rule 6: (3 to 15 minute sessions, instant restart) unchanged.
+- Rule 7: (per-player assists) unchanged.

@@ -8611,8 +8611,8 @@ class View {
         if (n === -1 || n === 0) { const led = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, DECK + 1.5), new THREE.MeshBasicMaterial({ color: T.p[0] })); add(led, cx + PITCH / 2 + (n ? 0.14 : -0.14), 0.062, mid); this.leds.push(led); const lg2 = new THREE.Mesh(new THREE.PlaneGeometry(0.16, DECK + 1.5).rotateX(-Math.PI / 2), this.ledGlow); lg2.renderOrder = 3; add(lg2, cx + PITCH / 2 + (n ? 0.12 : -0.12), 0.064, mid); }
       }
       for (const s of [-1, 1]) {
-        const k = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 3.4), kBox); k.receiveShadow = true; add(k, cx + s * (far + 0.03), 0.5, DECK - 0.5);
-        const art = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.0), kMat); art.rotation.y = -s * Math.PI / 2; art.receiveShadow = true; add(art, cx + s * (far - 0.001), 0.5, DECK - 0.5);
+        const k = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.68, 3.4), kBox); k.receiveShadow = true; add(k, cx + s * (far + 0.03), 0.34, DECK - 0.5);
+        const art = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.68), kMat); art.rotation.y = -s * Math.PI / 2; art.receiveShadow = true; add(art, cx + s * (far - 0.001), 0.34, DECK - 0.5);
       }
     }
     // side walls: dark panels, pilasters and two neon tubes running the length of the hall
@@ -8628,21 +8628,16 @@ class View {
     const [ct, cc2] = canvas(1024, 64); for (let x = 0; x < 1024; x++) { const v = 10 + 9 * Math.sin(x / 1024 * Math.PI * 2 * 70) ** 2; cc2.fillStyle = `rgb(${v},${v},${v + 4})`; cc2.fillRect(x, 0, 1, 64); }
     const ctex = new THREE.CanvasTexture(ct); ctex.colorSpace = THREE.SRGBColorSpace;
     add(new THREE.Mesh(new THREE.PlaneGeometry(HALL * 2, 1.8), mat(0xffffff, 1, { map: ctex })), 0, 0.4, PIT + 0.08);
-    // masking units: an art panel per lane, and over this lane a live display of the bowler, frame and score
-    const lanes = 2 * NL + 1, MW = 512, [mt, mc] = canvas(MW * lanes, 256), mg = mc.createLinearGradient(0, 0, 0, 256);
-    mg.addColorStop(0, '#1C1934'); mg.addColorStop(1, '#0B0A15'); mc.fillStyle = mg; mc.fillRect(0, 0, MW * lanes, 256);
-    for (let i = 0; i < lanes; i++) {
-      const x0 = i * MW, no = 14 - NL + i, R4 = rand(31 + i * 7);
-      mc.save(); mc.beginPath(); mc.rect(x0 + 14, 14, MW - 28, 228); mc.clip();
-      for (let k = 0; k < 3; k++) { const col = R4() < 0.5 ? MAG : VIO; mc.strokeStyle = col; mc.globalAlpha = 0.35; mc.lineWidth = 6 + R4() * 16; mc.shadowColor = col; mc.shadowBlur = 24; mc.beginPath(); mc.arc(x0 + R4() * MW, 256 + R4() * 120, 120 + R4() * 200, Math.PI, Math.PI * 2); mc.stroke(); }
-      mc.restore(); mc.globalAlpha = 1; mc.shadowBlur = 0;
-      mc.strokeStyle = 'rgba(255,255,255,0.12)'; mc.lineWidth = 3; mc.strokeRect(x0 + 14, 14, MW - 28, 228);
-      mc.font = '800 150px Geist, "Segoe UI", sans-serif'; mc.textAlign = 'center'; mc.textBaseline = 'middle'; mc.lineWidth = 4; mc.strokeStyle = 'rgba(240,236,255,0.55)'; mc.strokeText(String(no), x0 + MW / 2, 136);
+    // masking units: one screen per lane, all in the same layout. Lane 14 follows the match; the others follow their own bowlers.
+    const lanes = 2 * NL + 1;
+    add(new THREE.Mesh(new THREE.BoxGeometry(PITCH * lanes, 0.98, 0.12), mat('#08070F', 0.7)), 0, 1.13, DECK + 0.2);       // the fascia the screens sit in
+    this.boards = new Map();
+    for (let n = -NL; n <= NL; n++) {
+      const [cv3, c3] = canvas(n ? 512 : 1024, n ? 256 : 512), tex3 = new THREE.CanvasTexture(cv3); tex3.colorSpace = THREE.SRGBColorSpace; tex3.anisotropy = 8;
+      add(new THREE.Mesh(new THREE.PlaneGeometry(PITCH - 0.1, (PITCH - 0.1) / 2), new THREE.MeshBasicMaterial({ map: tex3 })), n * PITCH, 1.13, DECK + 0.135);
+      this.boards.set(n, { c: c3, w: cv3.width, tex: tex3, key: '' });
     }
-    const mtex = new THREE.CanvasTexture(mt); mtex.colorSpace = THREE.SRGBColorSpace; mtex.anisotropy = 8;
-    add(new THREE.Mesh(new THREE.BoxGeometry(PITCH * lanes, 0.9, 0.12), new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.6, emissive: 0xffffff, emissiveMap: mtex, emissiveIntensity: 0.85 })), 0, 1.13, DECK + 0.2);
-    [this.dcv, this.dc] = canvas(1024, 512); this.dtex = new THREE.CanvasTexture(this.dcv); this.dtex.colorSpace = THREE.SRGBColorSpace; this.dtex.anisotropy = 8; this.dkey = '';
-    add(new THREE.Mesh(new THREE.PlaneGeometry(PITCH * 0.94, 0.82), new THREE.MeshBasicMaterial({ map: this.dtex })), 0, 1.13, DECK + 0.135);
+    this.dkey = '';
     // above the masking units: the hall's neon sign
     const SW = 4096, [st2, sc2] = canvas(SW, 300);
     sc2.fillStyle = '#08070F'; sc2.fillRect(0, 0, SW, 300); sc2.textAlign = 'center'; sc2.textBaseline = 'middle';
@@ -8686,6 +8681,8 @@ class View {
     this.nb = [-3, -2, -1, 1, 2, 3].map((n, li) => ({ n, li, state: 'idle', t: 3 + R5() * 10, pins: SPOTS.map(() => ({ k: 0, down: false })) }));
     const nbg = new THREE.SphereGeometry(BR, 32, 20); this.pool = [0, 1].map(() => { const m = new THREE.Mesh(nbg, new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05 })); m.castShadow = true; m.visible = false; sc.add(m); return m; });
     this.cols = cols; this.rackAll();
+    const who = ['Kai', 'Mel', 'Juno', 'Raff', 'Tess', 'Otto'];
+    this.nb.forEach((L, i) => { L.who = who[i]; L.rolls = []; this.play(L, 2 + Math.floor(R5() * 5)); this.neighbourBoard(L); });
 
     // The ball: a swirled pearl in the bowler's colour with their mark and three finger holes
     this.skins = [0, 1].map(i => {
@@ -8733,6 +8730,16 @@ class View {
     });
     this.racks.instanceMatrix.needsUpdate = true;
   }
+  play(L, n, first) {                                          // a neighbour's frames, made up: the first ball from the animation if there was one
+    const R = this.R;
+    for (let i = 0; i < n; i++) {
+      if (frames(L.rolls)[9].done) L.rolls = [];
+      const a = first != null && i === 0 ? first : R() < 0.35 ? 10 : 6 + Math.floor(R() * 4); L.rolls.push(a);
+      const fr = frames(L.rolls), f = fr.findIndex(q => !q.done);
+      if (f >= 0 && a < 10) L.rolls.push(R() < 0.5 ? 10 - a : Math.floor(R() * (10 - a)));
+      if (f === 9) while (!frames(L.rolls)[9].done) L.rolls.push(Math.min(standing(L.rolls), 6 + Math.floor(R() * 5)));
+    }
+  }
   neighbours(dt) {
     const R = this.R;
     for (const L of this.nb) {
@@ -8748,6 +8755,7 @@ class View {
           L.state = 'fall'; L.t = 0; const strike = R() < 0.4 || Math.abs(L.x - 0.07) < 0.05, keep = strike ? 0 : 1 + Math.floor(R() * 4), order = SPOTS.map((_, i) => i).sort(() => R() - 0.5);
           L.pins.forEach((p, i) => { const s2 = SPOTS[i], fx = s2.x - L.x, fd = s2.d - HEAD + 0.25, m = Math.hypot(fx, fd) || 1;
             Object.assign(p, { down: !order.slice(0, keep).includes(i), delay: (s2.d - HEAD) * 0.4 + R() * 0.08, dx: (fx / m) * 0.3 + (R() - 0.5) * 0.15, dd: (fd / m) * 0.35, ax: fd / m + (R() - 0.5) * 0.6, az: -fx / m + (R() - 0.5) * 0.6, k: 0 }); });
+          this.play(L, 1, 10 - keep); this.neighbourBoard(L);
           const pan = U.clamp(L.n / 3, -1, 1) * 0.85;
           for (let j = 0; j < 4; j++) Sfx.play('tg-pin', { vol: 0.025 + R() * 0.03, pan, delay: j * 0.05 + R() * 0.05, pitch: 0.8 + R() * 0.3 });
         }
@@ -8759,23 +8767,41 @@ class View {
       } else if (L.state === 'sweep' && L.t <= 0) { for (const p of L.pins) { p.gone = false; delete p.ax; } this.rack(L, true); L.state = 'idle'; L.t = 6 + R() * 16; }
     }
   }
-  display(g) {                                                 // the screen over lane 14: who is bowling, which frame, their score
-    const p = g.cur, t = g.turn, over = g.state === 'over', name = NAME[p.c];
-    const sub = over ? 'Final' : g.state === 'intro' ? 'First to bowl' : t && t.ro ? 'Roll-off ' + t.ro : t ? `Frame ${t.f + 1} · Ball ${t.b + 1}` : '';
-    const head = over ? (g.won < 0 ? 'A draw' : NAME[g.P[g.won].c] + ' wins') : name, sc = shown(p.rolls), key = [p.c, head, sub, sc].join('|');
-    if (key === this.dkey) return; this.dkey = key;
-    const c = this.dc, col = over && g.won < 0 ? '#E4E7ED' : T.p[over && g.won >= 0 ? g.P[g.won].c : p.c], gr = c.createLinearGradient(0, 0, 0, 512);
-    gr.addColorStop(0, '#16152A'); gr.addColorStop(1, '#09080F'); c.fillStyle = gr; c.fillRect(0, 0, 1024, 512);
-    c.strokeStyle = col; c.lineWidth = 8; c.shadowColor = col; c.shadowBlur = 30; c.strokeRect(14, 14, 996, 484); c.shadowBlur = 0;
-    c.fillStyle = 'rgba(255,255,255,0.04)'; for (let y = 20; y < 500; y += 6) c.fillRect(20, y, 984, 2);
-    c.textBaseline = 'middle'; c.textAlign = 'left'; c.font = '600 44px Geist, "Segoe UI", sans-serif'; c.fillStyle = 'rgba(228,231,237,0.6)'; c.fillText('LANE 14', 60, 80);
-    const mx = 92, my = 250; c.fillStyle = col; c.beginPath();
-    if ((over && g.won >= 0 ? g.P[g.won].c : p.c) === 0) c.arc(mx, my, 36, 0, 7); else { c.moveTo(mx, my - 44); c.lineTo(mx + 44, my); c.lineTo(mx, my + 44); c.lineTo(mx - 44, my); c.closePath(); }
-    c.fill(); c.font = '800 120px Geist, "Segoe UI", sans-serif'; c.fillStyle = col; c.shadowColor = col; c.shadowBlur = 24; c.fillText(head, 160, 250); c.shadowBlur = 0;
-    c.font = '500 54px Geist, "Segoe UI", sans-serif'; c.fillStyle = '#E4E7ED'; c.fillText(sub, 64, 410);
-    if (!over) { c.textAlign = 'right'; c.font = '700 150px "JetBrains Mono", Consolas, monospace'; c.fillStyle = '#F4F6FA'; c.fillText(String(sc), 960, 300); }
-    this.dtex.needsUpdate = true;
+  // One lane screen. o: { lane, name, sub, rolls, score, accent, mark (0 circle, 1 diamond, or none), live (frame index to outline), main }
+  board(n, o) {
+    const B = this.boards.get(n), key = JSON.stringify(o); if (key === B.key) return; B.key = key;
+    const c = B.c, k = B.w / 512; c.setTransform(k, 0, 0, k, 0, 0);
+    const rr = (x, y, w, h, r) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
+    c.fillStyle = '#05040A'; c.fillRect(0, 0, 512, 256);
+    const g = c.createLinearGradient(0, 0, 0, 256); g.addColorStop(0, '#1A1834'); g.addColorStop(1, '#0B0A17');
+    rr(5, 5, 502, 246, 16); c.fillStyle = g; c.fill();
+    c.save(); if (o.main) { c.shadowColor = o.accent; c.shadowBlur = 14; } c.strokeStyle = o.accent; c.globalAlpha = o.main ? 1 : 0.55; c.lineWidth = o.main ? 4 : 2.5; rr(5, 5, 502, 246, 16); c.stroke(); c.restore();
+    // lane badge, then what is happening
+    rr(20, 18, 72, 40, 10); c.fillStyle = o.accent; c.fill();
+    c.textBaseline = 'middle'; c.textAlign = 'center'; c.font = '800 28px Geist, "Segoe UI", sans-serif'; c.fillStyle = '#0B0A14'; c.fillText(String(o.lane), 56, 39);
+    c.textAlign = 'right'; c.font = '600 18px Geist, "Segoe UI", sans-serif'; c.fillStyle = 'rgba(228,231,237,0.62)'; c.fillText(o.sub.toUpperCase(), 490, 39);
+    // bowler and score
+    let nx = 22;
+    if (o.mark === 0 || o.mark === 1) { c.fillStyle = o.accent; c.beginPath(); if (o.mark === 0) c.arc(38, 108, 13, 0, 7); else { c.moveTo(38, 92); c.lineTo(54, 108); c.lineTo(38, 124); c.lineTo(22, 108); c.closePath(); } c.fill(); nx = 64; }
+    c.textAlign = 'left'; c.font = '800 44px Geist, "Segoe UI", sans-serif'; c.fillStyle = o.main ? o.accent : '#ECEAF6'; c.fillText(o.name.toUpperCase(), nx, 110);
+    if (o.score != null) { c.textAlign = 'right'; c.font = '700 58px "JetBrains Mono", Consolas, monospace'; c.fillStyle = '#F4F6FA'; c.fillText(String(o.score), 490, 110); }
+    // ten frames: marks on top, running total underneath
+    const fr = frames(o.rolls), bw = (468 - 9 * 4) / 10;
+    fr.forEach((q, f) => {
+      const x = 22 + f * (bw + 4), y = 160, on = f === o.live;
+      rr(x, y, bw, 76, 6); c.fillStyle = on ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.04)'; c.fill();
+      c.strokeStyle = on ? o.accent : 'rgba(255,255,255,0.16)'; c.lineWidth = on ? 3 : 1.5; c.stroke();
+      c.textAlign = 'center'; c.fillStyle = '#E4E7ED'; c.font = '600 20px "JetBrains Mono", Consolas, monospace'; c.fillText(marks(q, f).join(f === 9 ? '' : ' '), x + bw / 2, y + 22);
+      if (q.total != null) { c.font = '700 22px "JetBrains Mono", Consolas, monospace'; c.fillStyle = '#F4F6FA'; c.fillText(String(q.total), x + bw / 2, y + 56); }
+    });
+    B.tex.needsUpdate = true;
   }
+  display(g) {                                                 // the screen over lane 14: who is bowling, which frame, their score
+    const t = g.turn, over = g.state === 'over', who = over && g.won >= 0 ? g.P[g.won] : g.cur, c = who.c;
+    const sub = over ? 'Final' : g.state === 'intro' ? 'First to bowl' : t && t.ro ? 'Roll-off ' + t.ro : t ? `Frame ${t.f + 1} · Ball ${t.b + 1}` : '';
+    this.board(0, { lane: 14, name: over ? (g.won < 0 ? 'A draw' : NAME[c] + ' wins') : NAME[c], sub, rolls: who.rolls, score: shown(who.rolls), accent: over && g.won < 0 ? '#E4E7ED' : T.p[c], mark: over && g.won < 0 ? null : c, live: over || !t || t.ro || who !== g.cur ? -1 : t.f, main: true });
+  }
+  neighbourBoard(L) { const fr = frames(L.rolls), f = fr.findIndex(q => !q.done); this.board(L.n, { lane: 14 + L.n, name: L.who, sub: f < 0 ? 'Final' : 'Frame ' + (f + 1), rolls: L.rolls, score: shown(L.rolls), accent: L.n % 2 ? '#B49CFF' : '#FF7AE0', live: f, main: false }); }
   render(g) {
     const now = performance.now(), dt = Math.min(0.1, this.last ? (now - this.last) / 1000 : 0.016); this.last = now;
     const want = U.clamp(Math.round(W * (Couch.Engine.scale || 1)), 960, 1920);
