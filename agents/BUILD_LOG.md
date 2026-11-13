@@ -56,3 +56,17 @@ line below, each followed by text.
 - Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
 - Rule 6: (3 to 15 minute sessions, instant restart) unchanged.
 - Rule 7: (per-player assists) unchanged.
+
+## 2026-11-14 · tenpin-grudge · polish
+- Scope: the hall, at Marco's request ("the alley is lacking"). No change to physics, scoring, controls or the bot.
+- Kit: as before; nothing new in the vendored block.
+- Two-player action: unchanged. A versus match on one lane.
+- Hard part: making the hall feel alive without touching the simulation. Other bowlers on lanes 11 to 17 are a scripted animation in the view only, with their pin noise played quietly and panned to their lane.
+- Assists: unchanged.
+- Rule 1: (one shared screen) unchanged; the screen over lane 14 repeats the bowler, frame and score already on the scorecard.
+- Rule 2: (no hidden information) unchanged.
+- Rule 3: (win and lose together) WAIVED by Marco for this slot, as before.
+- Rule 4: (revive, never eliminate) unchanged.
+- Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
+- Rule 6: (3 to 15 minute sessions, instant restart) unchanged.
+- Rule 7: (per-player assists) unchanged.

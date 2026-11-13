@@ -8516,7 +8516,7 @@ class View {
     if (!gl) throw new Error('no WebGL');
     const r = this.r = new THREE.WebGLRenderer({ canvas: cv, context: gl }); r.setPixelRatio(1);
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFShadowMap; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0;
-    const sc = this.scene = new THREE.Scene(), bg = new THREE.Color('#07090D'); sc.background = bg; sc.fog = new THREE.Fog(bg, 24, 46);
+    const sc = this.scene = new THREE.Scene(), bg = new THREE.Color('#0A0914'); sc.background = bg; sc.fog = new THREE.Fog(bg, 26, 50);
     this.cam = new THREE.PerspectiveCamera(27, 16 / 9, 0.05, 80); this.pos = new THREE.Vector3(0, 1.7, 4.6); this.look = new THREE.Vector3(0, 0.1, -6);
     this.last = 0; this.size = 0; this.axis = new THREE.Vector3(); this.turn = new THREE.Quaternion(); this.sweepK = 0;
     const len = DECK + 1.5, mid = (DECK - 1.5) / 2, far = LW + GW, add = (m, x, y, d) => { m.position.set(x, y, -d); sc.add(m); return m; };
@@ -8532,7 +8532,7 @@ class View {
     this.env = pm.fromScene(room, 0.03).texture; sc.environment = this.env; sc.environmentIntensity = 0.55; pm.dispose(); for (const o of dispose) o.dispose();
 
     // Lights: a key light from the ceiling, a hard light hidden in the masking unit over the pin deck, a little fill
-    sc.add(new THREE.HemisphereLight(0xc9d4ff, 0x1a130c, 0.35));
+    sc.add(new THREE.HemisphereLight(0xc9c4ff, 0x1a1020, 0.45));
     const sun = new THREE.DirectionalLight(0xfff1df, 1.5); sun.position.set(1.4, 9, 3); sun.target.position.set(0, 0, -10); sun.castShadow = true;
     Object.assign(sun.shadow.camera, { left: -2.2, right: 2.2, top: 15, bottom: -15, near: 2, far: 24 }); sun.shadow.camera.updateProjectionMatrix();
     sun.shadow.mapSize.set(1024, 4096); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.01; sun.shadow.radius = 3; sc.add(sun, sun.target);
@@ -8580,43 +8580,82 @@ class View {
     const lane = new THREE.Mesh(new THREE.PlaneGeometry(LW * 2, len), laneMat); lane.rotation.x = -Math.PI / 2; lane.receiveShadow = true; lane.renderOrder = 1; add(lane, 0, 0, mid);
     const under = new THREE.Mesh(new THREE.PlaneGeometry(PITCH * 7, 80), new THREE.MeshBasicMaterial({ color: 0x020304 })); under.rotation.x = -Math.PI / 2; add(under, 0, -0.8, 10);
 
-    // Gutters (shallow half-pipes), capping, kickbacks; then two neighbouring lanes each side, with racked pins
+    // Gutters (shallow half-pipes), capping, kickbacks with artwork; three neighbouring lanes each side, with racked pins
+    const NL = 3, HALL = (NL + 0.5) * PITCH, MAG = '#FF4FD8', VIO = '#8B6CFF';
     const R2 = 0.168, half = Math.asin(GW / 2 / R2), gutGeo = new THREE.CylinderGeometry(R2, R2, len, 20, 1, true, -half, half * 2); gutGeo.rotateX(Math.PI / 2);
     const gutMat = mat('#2A303B', 0.32, { metalness: 0.55, side: THREE.DoubleSide }), capMat = mat('#1C222C', 0.28, { metalness: 0.2 }), sideLane = mat(new THREE.Color(0.62, 0.62, 0.66), 0.32, { map, envMapIntensity: 0.8 });
+    // kickback art: a dark violet panel with neon slashes
+    const [kt, kc] = canvas(1024, 300), kg = kc.createLinearGradient(0, 0, 0, 300); kg.addColorStop(0, '#1A1530'); kg.addColorStop(1, '#0A0912'); kc.fillStyle = kg; kc.fillRect(0, 0, 1024, 300);
+    kc.lineCap = 'round';
+    for (const [x, col, w] of [[180, MAG, 14], [250, VIO, 8], [560, VIO, 14], [620, MAG, 6], [880, MAG, 10]]) { kc.shadowColor = col; kc.shadowBlur = 30; kc.strokeStyle = col; kc.lineWidth = w; kc.beginPath(); kc.moveTo(x, 330); kc.lineTo(x + 160, -30); kc.stroke(); }
+    kc.shadowBlur = 0; kc.fillStyle = 'rgba(255,255,255,0.06)'; for (let y = 0; y < 300; y += 6) kc.fillRect(0, y, 1024, 1);
+    const ktex = new THREE.CanvasTexture(kt); ktex.colorSpace = THREE.SRGBColorSpace;
+    const kMat = new THREE.MeshStandardMaterial({ color: 0x222233, roughness: 0.5, emissive: 0xffffff, emissiveMap: ktex, emissiveIntensity: 0.7 }), kBox = mat('#12101C', 0.6);
     this.leds = [];
-    for (let n = -2; n <= 2; n++) {
+    for (let n = -NL; n <= NL; n++) {
       const cx = n * PITCH;
       for (const s of [-1, 1]) { const g2 = add(new THREE.Mesh(gutGeo, gutMat), cx + s * (LW + GW / 2), R2 - 0.048, mid); g2.receiveShadow = true; }
       if (n) { const l2 = new THREE.Mesh(new THREE.PlaneGeometry(LW * 2, len), sideLane); l2.rotation.x = -Math.PI / 2; l2.receiveShadow = true; add(l2, cx, 0, mid); }
-      if (n < 2) {                                                                                  // capping between this lane and the next
+      if (n < NL) {                                                                                 // capping between this lane and the next
         const cap = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, DECK + 1.5), capMat); cap.receiveShadow = true; add(cap, cx + PITCH / 2, 0.03, mid);
         if (n === -1 || n === 0) { const led = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, DECK + 1.5), new THREE.MeshBasicMaterial({ color: T.p[0] })); add(led, cx + PITCH / 2 + (n ? 0.14 : -0.14), 0.062, mid); this.leds.push(led); }
       }
-      for (const s of [-1, 1]) { const k = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 3.4), mat('#151A22', 0.6)); k.castShadow = false; k.receiveShadow = true; add(k, cx + s * (far + 0.03), 0.5, DECK - 0.5); }
+      for (const s of [-1, 1]) {
+        const k = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 3.4), kBox); k.receiveShadow = true; add(k, cx + s * (far + 0.03), 0.5, DECK - 0.5);
+        const art = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.0), kMat); art.rotation.y = -s * Math.PI / 2; art.receiveShadow = true; add(art, cx + s * (far - 0.001), 0.5, DECK - 0.5);
+      }
     }
-    const approach = new THREE.Mesh(new THREE.BoxGeometry(PITCH * 7, 0.1, 12), mat('#2A221B', 0.7)); add(approach, 0, -0.05, -7.5);   // the floor behind the foul lines
-    // pit and masking unit: one long lit fascia with the lane numbers, and the bowler's colour strip over this lane
-    add(new THREE.Mesh(new THREE.BoxGeometry(PITCH * 7, 0.02, 1.4), mat('#050608', 0.9)), 0, -0.34, DECK + 0.7);
-    add(new THREE.Mesh(new THREE.BoxGeometry(PITCH * 7, 1.8, 0.1), mat('#050608', 0.9)), 0, 0.4, PIT + 0.15);
-    const [mt, mc] = canvas(2048, 256), mw = 2048 / 5, mg = mc.createLinearGradient(0, 0, 0, 256);
-    mg.addColorStop(0, '#1B2130'); mg.addColorStop(1, '#0B0E15'); mc.fillStyle = mg; mc.fillRect(0, 0, 2048, 256);
-    [12, 13, 14, 15, 16].forEach((no, i) => {
-      const x0 = i * mw; mc.fillStyle = 'rgba(255,255,255,0.05)'; mc.fillRect(x0 + 24, 24, mw - 48, 208);
-      mc.strokeStyle = 'rgba(255,255,255,0.10)'; mc.lineWidth = 3; mc.strokeRect(x0 + 24, 24, mw - 48, 208);
-      mc.font = '700 120px Geist, "Segoe UI", sans-serif'; mc.textAlign = 'center'; mc.textBaseline = 'middle';
-      mc.fillStyle = no === 14 ? '#F2F4F8' : 'rgba(228,231,237,0.32)'; mc.fillText(String(no), x0 + mw / 2, 134);
-    });
-    const mtex = new THREE.CanvasTexture(mt); mtex.colorSpace = THREE.SRGBColorSpace;
-    add(new THREE.Mesh(new THREE.BoxGeometry(PITCH * 5, 0.9, 0.12), new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.6, emissive: 0xffffff, emissiveMap: mtex, emissiveIntensity: 0.9 })), 0, 1.13, DECK + 0.2);
-    add(new THREE.Mesh(new THREE.BoxGeometry(PITCH * 7, 3, 0.1), mat('#06080B', 1)), 0, 3.1, DECK + 0.26);
+    // side walls: dark panels, pilasters and two neon tubes running the length of the hall
+    for (const s of [-1, 1]) {
+      const wall = new THREE.Mesh(new THREE.PlaneGeometry(DECK + 14, 4.6), mat('#0D0C17', 0.8)); wall.rotation.y = -s * Math.PI / 2; add(wall, s * HALL, 2.2, (DECK - 14) / 2 + 0.3);
+      for (const [y, col] of [[0.95, MAG], [2.7, VIO]]) add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.035, DECK + 14), new THREE.MeshBasicMaterial({ color: new THREE.Color(col).multiplyScalar(1.6) })), s * (HALL - 0.24), y, (DECK - 14) / 2 + 0.3);
+      for (let d = -6; d < DECK; d += 4) add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 4.6, 0.5), mat('#15132A', 0.6)), s * (HALL - 0.1), 2.2, d);
+    }
+    const approach = new THREE.Mesh(new THREE.BoxGeometry(HALL * 2, 0.1, 12), mat('#221A24', 0.8)); add(approach, 0, -0.05, -7.5);   // the floor behind the foul lines
+    // pit: a black fabric curtain with soft folds
+    add(new THREE.Mesh(new THREE.BoxGeometry(HALL * 2, 0.02, 1.4), mat('#050608', 0.9)), 0, -0.34, DECK + 0.7);
+    const [ct, cc2] = canvas(1024, 64); for (let x = 0; x < 1024; x++) { const v = 10 + 9 * Math.sin(x / 1024 * Math.PI * 2 * 70) ** 2; cc2.fillStyle = `rgb(${v},${v},${v + 4})`; cc2.fillRect(x, 0, 1, 64); }
+    const ctex = new THREE.CanvasTexture(ct); ctex.colorSpace = THREE.SRGBColorSpace;
+    add(new THREE.Mesh(new THREE.PlaneGeometry(HALL * 2, 1.8), mat(0xffffff, 1, { map: ctex })), 0, 0.4, PIT + 0.08);
+    // masking units: an art panel per lane, and over this lane a live display of the bowler, frame and score
+    const lanes = 2 * NL + 1, MW = 512, [mt, mc] = canvas(MW * lanes, 256), mg = mc.createLinearGradient(0, 0, 0, 256);
+    mg.addColorStop(0, '#1C1934'); mg.addColorStop(1, '#0B0A15'); mc.fillStyle = mg; mc.fillRect(0, 0, MW * lanes, 256);
+    for (let i = 0; i < lanes; i++) {
+      const x0 = i * MW, no = 14 - NL + i, R4 = rand(31 + i * 7);
+      mc.save(); mc.beginPath(); mc.rect(x0 + 14, 14, MW - 28, 228); mc.clip();
+      for (let k = 0; k < 3; k++) { const col = R4() < 0.5 ? MAG : VIO; mc.strokeStyle = col; mc.globalAlpha = 0.35; mc.lineWidth = 6 + R4() * 16; mc.shadowColor = col; mc.shadowBlur = 24; mc.beginPath(); mc.arc(x0 + R4() * MW, 256 + R4() * 120, 120 + R4() * 200, Math.PI, Math.PI * 2); mc.stroke(); }
+      mc.restore(); mc.globalAlpha = 1; mc.shadowBlur = 0;
+      mc.strokeStyle = 'rgba(255,255,255,0.12)'; mc.lineWidth = 3; mc.strokeRect(x0 + 14, 14, MW - 28, 228);
+      mc.font = '800 150px Geist, "Segoe UI", sans-serif'; mc.textAlign = 'center'; mc.textBaseline = 'middle'; mc.lineWidth = 4; mc.strokeStyle = 'rgba(240,236,255,0.55)'; mc.strokeText(String(no), x0 + MW / 2, 136);
+    }
+    const mtex = new THREE.CanvasTexture(mt); mtex.colorSpace = THREE.SRGBColorSpace; mtex.anisotropy = 8;
+    add(new THREE.Mesh(new THREE.BoxGeometry(PITCH * lanes, 0.9, 0.12), new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.6, emissive: 0xffffff, emissiveMap: mtex, emissiveIntensity: 0.85 })), 0, 1.13, DECK + 0.2);
+    [this.dcv, this.dc] = canvas(1024, 512); this.dtex = new THREE.CanvasTexture(this.dcv); this.dtex.colorSpace = THREE.SRGBColorSpace; this.dtex.anisotropy = 8; this.dkey = '';
+    add(new THREE.Mesh(new THREE.PlaneGeometry(PITCH * 0.94, 0.82), new THREE.MeshBasicMaterial({ map: this.dtex })), 0, 1.13, DECK + 0.135);
+    // above the masking units: the hall's neon sign
+    const SW = 4096, [st2, sc2] = canvas(SW, 300);
+    sc2.fillStyle = '#08070F'; sc2.fillRect(0, 0, SW, 300); sc2.textAlign = 'center'; sc2.textBaseline = 'middle';
+    const neon = (draw, col, w) => { for (const [b, a, lw] of [[60, 0.9, w * 2.4], [22, 1, w * 1.3], [0, 1, w * 0.55]]) { sc2.shadowColor = col; sc2.shadowBlur = b; sc2.globalAlpha = a; sc2.strokeStyle = lw < w ? '#FFF4FD' : col; sc2.lineWidth = lw; draw(); } sc2.shadowBlur = 0; sc2.globalAlpha = 1; };
+    sc2.font = 'italic 800 150px Geist, "Segoe UI", sans-serif';
+    neon(() => sc2.strokeText('TENPIN GRUDGE', SW / 2, 150), MAG, 7);
+    for (const s of [-1, 1]) {
+      const cx2 = SW / 2 + s * 900;
+      neon(() => { sc2.beginPath(); sc2.ellipse(cx2, 205, 34, 58, 0, 0, 7); sc2.moveTo(cx2 + 18, 100); sc2.ellipse(cx2, 100, 18, 40, 0, 0, 7); sc2.stroke(); }, VIO, 6);
+      neon(() => { sc2.beginPath(); sc2.arc(cx2 + s * 120, 180, 60, 0, 7); sc2.stroke(); }, VIO, 6);
+      neon(() => { sc2.beginPath(); sc2.moveTo(cx2 + s * 300, 150); sc2.lineTo(cx2 + s * 1100, 150); sc2.stroke(); }, MAG, 4);
+    }
+    const stex = new THREE.CanvasTexture(st2); stex.colorSpace = THREE.SRGBColorSpace; stex.anisotropy = 8;
+    add(new THREE.Mesh(new THREE.PlaneGeometry(PITCH * lanes, PITCH * lanes * 300 / SW), new THREE.MeshBasicMaterial({ map: stex })), 0, 1.6 + PITCH * lanes * 150 / SW, DECK + 0.2);
+    add(new THREE.Mesh(new THREE.BoxGeometry(HALL * 2, 3, 0.1), mat('#08070F', 1)), 0, 3.1, DECK + 0.26);
     this.strip = add(new THREE.Mesh(new THREE.BoxGeometry(far * 2 + 0.3, 0.05, 0.13), new THREE.MeshBasicMaterial({ color: T.text })), 0, 0.66, DECK + 0.2);
     // ceiling: strips of light running across the hall, fading into the dark
-    const lights = new THREE.InstancedMesh(new THREE.BoxGeometry(PITCH * 6, 0.05, 0.16), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.65, 1.8) }), 12), o3 = new THREE.Object3D();
+    const lights = new THREE.InstancedMesh(new THREE.BoxGeometry(HALL * 2 - 0.4, 0.05, 0.16), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.65, 1.8) }), 12), o3 = new THREE.Object3D();
     for (let i = 0; i < 12; i++) { o3.position.set(0, 4.2, -3 - i * 2.4); o3.updateMatrix(); lights.setMatrixAt(i, o3.matrix); } sc.add(lights);
-    add(new THREE.Mesh(new THREE.PlaneGeometry(PITCH * 7, 40).rotateX(Math.PI / 2), mat('#05070A', 1)), 0, 4.26, 12);
+    add(new THREE.Mesh(new THREE.PlaneGeometry(HALL * 2, 40).rotateX(Math.PI / 2), mat('#06050C', 1)), 0, 4.26, 12);
     this.bumpers = [-1, 1].map(s => add(new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, DECK), this.strip.material), s * (LW + 0.002), 0.03, DECK / 2));
     // pinsetter sweep bar
     this.sweep = add(new THREE.Mesh(new THREE.BoxGeometry(far * 2, 0.05, 0.02), mat('#A3ACBB', 0.45, { metalness: 0.1 })), 0, 1.2, HEAD - 0.4); this.sweep.castShadow = true;
+    this.NL = NL;
 
     // Pins: a smooth lathe profile, glossy white with two red neck stripes
     const prof = smooth([[0.026, 0], [0.031, 0.012], [0.046, 0.06], [0.0585, 0.105], [0.0605, 0.127], [0.057, 0.16], [0.045, 0.2], [0.032, 0.236], [0.0255, 0.262], [0.0238, 0.282],
@@ -8628,9 +8667,12 @@ class View {
     const ptex = new THREE.CanvasTexture(pt); ptex.colorSpace = THREE.SRGBColorSpace;
     const pm2 = new THREE.MeshPhysicalMaterial({ map: ptex, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.06, envMapIntensity: 1.1 });
     this.pins = SPOTS.map(() => { const m = new THREE.Mesh(pg, pm2); m.castShadow = true; m.receiveShadow = true; sc.add(m); return m; });
-    const racks = new THREE.InstancedMesh(pg, pm2, 40); let k2 = 0;
-    for (const n of [-2, -1, 1, 2]) for (const s of SPOTS) { o3.position.set(n * PITCH + s.x, COG, -s.d); o3.updateMatrix(); racks.setMatrixAt(k2++, o3.matrix); }
-    racks.receiveShadow = true; sc.add(racks);
+    // the other bowlers in the hall: every so often someone rolls a ball on a neighbouring lane
+    const R5 = rand(97), cols = ['#9B5CFF', '#20C997', '#E64980', '#4DD4FF', '#F8F0E3', '#5C7CFA', '#FF8787'];
+    this.racks = new THREE.InstancedMesh(pg, pm2, 60); this.racks.receiveShadow = true; this.racks.castShadow = true; sc.add(this.racks); this.o3 = o3; this.R = R5;
+    this.nb = [-3, -2, -1, 1, 2, 3].map((n, li) => ({ n, li, state: 'idle', t: 3 + R5() * 10, pins: SPOTS.map(() => ({ k: 0, down: false })) }));
+    const nbg = new THREE.SphereGeometry(BR, 32, 20); this.pool = [0, 1].map(() => { const m = new THREE.Mesh(nbg, new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05 })); m.castShadow = true; m.visible = false; sc.add(m); return m; });
+    this.cols = cols; this.rackAll();
 
     // The ball: a swirled pearl in the bowler's colour with their mark and three finger holes
     this.skins = [0, 1].map(i => {
@@ -8665,10 +8707,67 @@ class View {
     this.guide = new THREE.Mesh(gg, new THREE.MeshBasicMaterial({ color: T.text, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide, fog: false }));
     this.guide.frustumCulled = false; this.guide.renderOrder = 2; sc.add(this.guide);
   }
+  rackAll() { for (const L of this.nb) this.rack(L, true); }
+  rack(L, stand) {                                             // write one neighbouring lane's ten pins into the instanced mesh
+    const o = this.o3, cx = L.n * PITCH;
+    L.pins.forEach((p, i) => {
+      const s2 = SPOTS[i];
+      if (stand) { p.k = 0; p.down = false; }
+      const e = p.k * p.k * (3 - 2 * p.k);
+      o.position.set(cx + s2.x + (p.dx || 0) * e, COG - (COG - 0.06) * e, -(s2.d + (p.dd || 0) * e));
+      if (p.ax) o.quaternion.setFromAxisAngle(this.axis.set(p.ax, 0, p.az).normalize(), e * 1.48); else o.quaternion.set(0, 0, 0, 1);
+      o.scale.setScalar(p.gone ? 0 : 1); o.updateMatrix(); this.racks.setMatrixAt(L.li * 10 + i, o.matrix);
+    });
+    this.racks.instanceMatrix.needsUpdate = true;
+  }
+  neighbours(dt) {
+    const R = this.R;
+    for (const L of this.nb) {
+      L.t -= dt;
+      if (L.state === 'idle' && L.t <= 0) {
+        const ball = this.pool.find(b => !b.visible); if (!ball) { L.t = 2; continue; }
+        ball.material.color.set(this.cols[Math.floor(R() * this.cols.length)]); ball.visible = true;
+        Object.assign(L, { state: 'roll', ball, x: 0.12 + (R() - 0.5) * 0.35, vx: 0.15 + R() * 0.15, d: 0.2, v: 6.8 + R() * 2.2, t: 0 });
+      } else if (L.state === 'roll' || L.state === 'fall') {
+        L.d += L.v * dt; if (L.d > 12 && L.state === 'roll') L.vx -= 0.5 * dt; L.x += L.vx * dt;
+        const b = L.ball; b.visible = L.d < DECK + 0.4; b.position.set(L.n * PITCH + L.x, BR, -L.d); b.rotateX(-L.v * dt / BR);
+        if (L.state === 'roll' && L.d >= HEAD - 0.12) {             // impact: a strike now and then, otherwise most of the rack
+          L.state = 'fall'; L.t = 0; const strike = R() < 0.4 || Math.abs(L.x - 0.07) < 0.05, keep = strike ? 0 : 1 + Math.floor(R() * 4), order = SPOTS.map((_, i) => i).sort(() => R() - 0.5);
+          L.pins.forEach((p, i) => { const s2 = SPOTS[i], fx = s2.x - L.x, fd = s2.d - HEAD + 0.25, m = Math.hypot(fx, fd) || 1;
+            Object.assign(p, { down: !order.slice(0, keep).includes(i), delay: (s2.d - HEAD) * 0.4 + R() * 0.08, dx: (fx / m) * 0.3 + (R() - 0.5) * 0.15, dd: (fd / m) * 0.35, ax: fd / m + (R() - 0.5) * 0.6, az: -fx / m + (R() - 0.5) * 0.6, k: 0 }); });
+          const pan = U.clamp(L.n / 3, -1, 1) * 0.85;
+          for (let j = 0; j < 4; j++) Sfx.play('tg-pin', { vol: 0.025 + R() * 0.03, pan, delay: j * 0.05 + R() * 0.05, pitch: 0.8 + R() * 0.3 });
+        }
+        if (L.state === 'fall') {
+          L.t += dt; for (const p of L.pins) if (p.down) p.k = U.clamp((L.t - p.delay) / 0.45, 0, 1);
+          if (L.t > 3.2) { L.state = 'sweep'; L.t = 0.8; for (const p of L.pins) p.gone = p.down; b.visible = false; }
+          this.rack(L, false);
+        }
+      } else if (L.state === 'sweep' && L.t <= 0) { for (const p of L.pins) { p.gone = false; delete p.ax; } this.rack(L, true); L.state = 'idle'; L.t = 6 + R() * 16; }
+    }
+  }
+  display(g) {                                                 // the screen over lane 14: who is bowling, which frame, their score
+    const p = g.cur, t = g.turn, over = g.state === 'over', name = NAME[p.c];
+    const sub = over ? 'Final' : g.state === 'intro' ? 'First to bowl' : t && t.ro ? 'Roll-off ' + t.ro : t ? `Frame ${t.f + 1} · Ball ${t.b + 1}` : '';
+    const head = over ? (g.won < 0 ? 'A draw' : NAME[g.P[g.won].c] + ' wins') : name, sc = shown(p.rolls), key = [p.c, head, sub, sc].join('|');
+    if (key === this.dkey) return; this.dkey = key;
+    const c = this.dc, col = over && g.won < 0 ? '#E4E7ED' : T.p[over && g.won >= 0 ? g.P[g.won].c : p.c], gr = c.createLinearGradient(0, 0, 0, 512);
+    gr.addColorStop(0, '#16152A'); gr.addColorStop(1, '#09080F'); c.fillStyle = gr; c.fillRect(0, 0, 1024, 512);
+    c.strokeStyle = col; c.lineWidth = 8; c.shadowColor = col; c.shadowBlur = 30; c.strokeRect(14, 14, 996, 484); c.shadowBlur = 0;
+    c.fillStyle = 'rgba(255,255,255,0.04)'; for (let y = 20; y < 500; y += 6) c.fillRect(20, y, 984, 2);
+    c.textBaseline = 'middle'; c.textAlign = 'left'; c.font = '600 44px Geist, "Segoe UI", sans-serif'; c.fillStyle = 'rgba(228,231,237,0.6)'; c.fillText('LANE 14', 60, 80);
+    const mx = 92, my = 250; c.fillStyle = col; c.beginPath();
+    if ((over && g.won >= 0 ? g.P[g.won].c : p.c) === 0) c.arc(mx, my, 36, 0, 7); else { c.moveTo(mx, my - 44); c.lineTo(mx + 44, my); c.lineTo(mx, my + 44); c.lineTo(mx - 44, my); c.closePath(); }
+    c.fill(); c.font = '800 120px Geist, "Segoe UI", sans-serif'; c.fillStyle = col; c.shadowColor = col; c.shadowBlur = 24; c.fillText(head, 160, 250); c.shadowBlur = 0;
+    c.font = '500 54px Geist, "Segoe UI", sans-serif'; c.fillStyle = '#E4E7ED'; c.fillText(sub, 64, 410);
+    if (!over) { c.textAlign = 'right'; c.font = '700 150px "JetBrains Mono", Consolas, monospace'; c.fillStyle = '#F4F6FA'; c.fillText(String(sc), 960, 300); }
+    this.dtex.needsUpdate = true;
+  }
   render(g) {
     const now = performance.now(), dt = Math.min(0.1, this.last ? (now - this.last) / 1000 : 0.016); this.last = now;
     const want = U.clamp(Math.round(W * (Couch.Engine.scale || 1)), 960, 1920);
     if (want !== this.size) { this.size = want; this.r.setSize(want, Math.round(want * 9 / 16), false); }
+    this.neighbours(Math.min(dt, 0.05)); this.display(g);
     const ph = g.ph, st = g.state, c = g.cur ? g.cur.c : 0, onLane = p => Math.abs(p.x) < LW - 0.02 && -p.z < DECK && -p.z > -1.4 && p.y > -0.05;
     const sink = (p, from) => 0.048 * U.clamp((Math.abs(p.x) - from) / 0.06, 0, 1);
     ph.pins.forEach((b, i) => {
