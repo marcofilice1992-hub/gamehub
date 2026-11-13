@@ -27,3 +27,17 @@ line below, each followed by text.
 - Winning runs: Swarm Night 11.7 to 12.2 min, Tank for Two 9.1 to 10.9 min.
 - Engine Lab never ends by design (a demo); the harness treats it as a utility.
 - Harness proven on a re-added Tank for Two (new build), a swap of Tank for Two into a renamed slot (replacement), and a tampered branch (caught a changed neighbour, a missing retired copy and a network call).
+
+## 2026-11-14 · tenpin-grudge · replaces slow-boat
+- Scope: one lane; swing and hook controls; rigid-body pins; ten-pin scoring on two scorecards; a roll-off for ties, a draw after three; per-seat assists; a bot for each seat. Built in chat at Marco's request, ahead of the queue.
+- Kit: Particles for confetti, the kit's timers, `Couch.lib.THREE` for the picture and `Couch.lib.CANNON` for the physics. No Camera, World or Tilemap: the lane is 3D.
+- Two-player action: none inside a ball. It is a match: you alternate frames on one lane and watch each other bowl.
+- Hard part: pin action that feels right and repeats exactly. Physics runs on its own 1/240 s step whatever `dt` is. The ball is a sphere to the boards and an upright drum to the pins, so it ploughs through instead of climbing them. Pin bounce, friction and inertia were tuned until only a pocket hit strikes often: about 56% for a ball hooking into the pocket, 32% for a straight pocket ball, 13% dead centre.
+- Assists: per seat. Light: the guide line runs to the pins, release drift is halved, 25% more hook. Strong: a live path preview while the ball rolls, drift quartered, power never under 70%, gutter bumpers up.
+- Rule 1: (one shared screen) one lane and one camera; both scorecards are always on screen.
+- Rule 2: (no hidden information) scores, each player's best possible score, the aim line and the standing pins are shown to both.
+- Rule 3: (win and lose together) WAIVED by Marco for this slot. It is a versus game with one winner; the slot is in `noFailSlots`, so check 6 is skipped.
+- Rule 4: (revive, never eliminate) nobody is knocked out. Both bowl all ten frames, and a tie is settled by a roll-off.
+- Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3. Each ball is bowled by one player.
+- Rule 6: (3 to 15 minute sessions, instant restart) bots finish a match in about 6 minutes; two people should take 8 to 12. Play again from the results screen.
+- Rule 7: (per-player assists) each seat's own assist level applies to its own balls, which also works as a handicap.
