@@ -20,7 +20,7 @@ const R = Couch.register;
   ['swarm-night', 'Swarm Night', 'Survive the swarm with shared upgrades.', 'Frantic', 'S'],
   ['deep-dive', 'Deep Dive', 'Dig down on one shared air hose.', 'Medium', 'M'],
   ['allotment', 'Allotment', 'A shared garden with no way to fail.', 'Calm', 'M'],
-  ['slow-boat', 'Slow Boat', 'Sail and trade between islands.', 'Calm', 'L'],
+  ['tenpin-grudge', 'Tenpin Grudge', 'Ten-pin bowling, head to head, in 3D.', 'Calm', 'M'],
   ['floodline', 'Floodline', 'A board game against a rising river.', 'Calm', 'M'],
 ].forEach(([id, title, line, pace, size], i) => R({ id, n: i + 1, title, line, pace, size, players: 2 }));
 })();
