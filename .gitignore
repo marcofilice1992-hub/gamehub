@@ -1,0 +1,4 @@
+test/shots/
+test/watch/
+__pycache__/
+.DS_Store

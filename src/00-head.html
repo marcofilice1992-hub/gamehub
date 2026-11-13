@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Couch Co-op</title>
+<!--
+  COUCH CO-OP · master file
+  One HTML file: the shared engine, the launcher, and every game.
+  Open it in Chrome on the PC, press F11, and pick up two controllers.
+
+  Layout of this file
+    1. ENGINE core     tokens, saves, sound and music, input (two seats, practice bot), drawing helpers
+    2. ENGINE runtime  camera, particles, grid, loop, scenes, game plug-in API
+    3. ENGINE kit      world, tilemaps, platformer, rope, sprites, scripts, route finding,
+                       hex grids, lighting, interact and carry, choice cards, simulate
+    4. GAMES           the 15-slot manifest, the Test Range, the Engine Lab, then one block per game
+
+  Developer keys: F3 timings, F4 colliders, F6 slow motion.
+  From the browser console: Couch.simulate('test-range', { seed: 1 }) plays a game with bots and no screen.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #07090D; overflow: hidden; overscroll-behavior: none; }
+  canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  noscript { color: #E4E7ED; font: 400 17px/1.5 "Segoe UI", system-ui, sans-serif; display: block; padding: 24px; }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Couch Co-op game screen"></canvas>
+<noscript>Couch Co-op needs JavaScript turned on.</noscript>
