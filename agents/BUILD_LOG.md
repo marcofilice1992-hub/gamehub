@@ -1,0 +1,29 @@
+# Build log
+
+One entry per run, newest at the bottom. A build or polish entry starts with a heading that holds the slot id,
+then the plan, then the result. Check 10 of `tools/check.mjs` reads the last entry for the slot and needs every
+line below, each followed by text.
+
+```
+## <YYYY-MM-DD> · <slot-id> · build | polish | replaces <old-id>
+- Scope: (the First playable checklist)
+- Kit: (modules used)
+- Two-player action: ...
+- Hard part: ...
+- Assists: (what Light and Strong change, per seat)
+- Rule 1: (one shared screen) ...
+- Rule 2: (no hidden information) ...
+- Rule 3: (win and lose together) ...
+- Rule 4: (revive, never eliminate) ...
+- Rule 5: (an action neither can do alone) ...
+- Rule 6: (3 to 15 minute sessions, instant restart) ...
+- Rule 7: (per-player assists) ...
+- Result: (checks passed or failed, bot wins, PR number)
+```
+
+## 2026-11-13 · baseline · setup
+- Master: `master.html` as committed on 13 Nov 2026 (4,047 lines, identical to the Couch Co-op artifact and to what `build.sh` makes from `src/`). Built: Tank for Two (slot 10), Swarm Night (slot 11), plus Test Range and Engine Lab.
+- Bot wins over seeds 1 to 10 at 30 steps a second: Swarm Night 4 of 10 at assist 0 and 4 of 10 at assist 2; Tank for Two 8 of 10 and 9 of 10; Test Range 6 of 10 and 10 of 10.
+- Winning runs: Swarm Night 11.7 to 12.2 min, Tank for Two 9.1 to 10.9 min.
+- Engine Lab never ends by design (a demo); the harness treats it as a utility.
+- Harness proven on a re-added Tank for Two (new build), a swap of Tank for Two into a renamed slot (replacement), and a tampered branch (caught a changed neighbour, a missing retired copy and a network call).

@@ -60,3 +60,21 @@ The scripts in `test/` drive `master.html` in headless Chrome with Playwright an
 | `sim.py`, `simtank.py` | Headless bot balance runs: `python3 test/sim.py 1 2 3` (seeds) |
 
 Balance runs can also be started from the browser console: `Couch.simulate('swarm-night', { seed: 1, step: 1 / 30 })`.
+
+## Game Builder agent
+
+A scheduled agent builds the remaining games one at a time and pitches new game ideas that could replace any slot.
+It works only through pull requests that you merge after playing.
+
+| Path | What it holds |
+| --- | --- |
+| `agents/RUNBOOK.md` | How each run works: build, polish, ideas, apply ideas, or stop |
+| `agents/QUEUE.md` | Build order |
+| `agents/BUILD_LOG.md`, `agents/IDEAS.md`, `agents/ENGINE_REQUESTS.md` | What each run did, every idea pitched, and engine gaps |
+| `specs/` | One spec per slot |
+| `tools/check.mjs` | The acceptance harness: `node tools/check.mjs --list`, `--baseline`, or `--slot <id>` |
+| `ideas/` | Idea pitches, one file per ideas run |
+| `retired/` | Games taken out of a slot, kept so they can come back |
+
+To answer an ideas pull request, comment `take 1`, `take 1 and 3`, `take 2 for slot 7` or `none`.
+Playtest notes go as comments on a game's pull request.

@@ -1,0 +1,39 @@
+{
+  "_note": "Owned by Marco. The Game Builder may not edit this file. An ideas pull request may add a slot to noFailSlots; it takes effect only when Marco merges it.",
+  "master": "master.html",
+  "sourceDir": "src",
+  "buildScript": "build.sh",
+  "agentPaths": [
+    "src/",
+    "build.sh",
+    "master.html",
+    "agents/",
+    "ideas/",
+    "retired/"
+  ],
+  "seeds": 10,
+  "simStepsPerSecond": 30,
+  "maxGameSeconds": 1200,
+  "winThresholdAssist0": 3,
+  "sessionMinutes": [
+    3,
+    15
+  ],
+  "neighbourSeeds": 3,
+  "screenSeconds": [
+    3,
+    30,
+    60
+  ],
+  "noFailSlots": [
+    "allotment"
+  ],
+  "utilities": [
+    "test-range",
+    "engine-lab"
+  ],
+  "allowedHosts": [
+    "fonts.googleapis.com",
+    "fonts.gstatic.com"
+  ]
+}
