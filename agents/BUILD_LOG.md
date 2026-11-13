@@ -112,3 +112,17 @@ line below, each followed by text.
 - Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
 - Rule 6: (3 to 15 minute sessions, instant restart) bots still finish in about 6 minutes; replays add up to 8 seconds per strike with two people.
 - Rule 7: (per-player assists) unchanged.
+
+## 2026-11-14 · tenpin-grudge · polish
+- Scope: a full feel pass against Marco's design brief: fix physics reliability, then controls, feedback and pacing, then presentation, then finish the two-player handover. Weaknesses found, by impact: (1) hook steered after release with its own meter, aim at 40 taps, swings started by a stick held over from the last turn; (2) the pin count could be taken while a pin was still tipping, so it depended on frame rate; (3) the same throw gave 4 to 10 pins, from rack jitter and physics state left over from the last shot; (4) no first-play guidance, no clear state, pending bonuses hidden, misses unexplained; (5) long holds and replays of up to 8 seconds on every strike.
+- Kit: as before. Every tuning value now lives in one `TUNE` block at the top of the file.
+- Two-player action: versus on one lane. Handovers now buzz the next bowler's controller, and their swing cannot start until they have let go of the stick or key.
+- Hard part: making similar inputs give similar results. Each pin's full physics state is reset when racked and pins re-enter the solver in a fixed order; the count is taken at a fixed physics step once every standing pin is still for 0.35 s (3.2 s at most). The same throw now gives the same count at 30, 60, 144 and 240 Hz. The ball slows on the lane (0.15 m/s² on oil, 0.55 dry). A pocket hit strikes 8 or 9 times in 12; a hooked ball has a wider pocket than a straight one.
+- Assists: Light shows a straight guide to the pins and halves drift; Strong previews the full path with your hook, raises bumpers, quarters drift and sets a 70% power floor. No assist touches a released ball.
+- Rule 1: (one shared screen) unchanged.
+- Rule 2: (no hidden information) hook, ball, oil and state are on the bowler's panel; each first ball says where it met the head pin and what to change.
+- Rule 3: (win and lose together) WAIVED by Marco for this slot, as before.
+- Rule 4: (revive, never eliminate) unchanged.
+- Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
+- Rule 6: (3 to 15 minute sessions, instant restart) bots finish in about 6 minutes; results can be skipped with A; strike replays are 3 seconds and off with reduced motion.
+- Rule 7: (per-player assists) unchanged.
