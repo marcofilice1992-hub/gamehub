@@ -41,3 +41,4 @@ line below, each followed by text.
 - Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3. Each ball is bowled by one player.
 - Rule 6: (3 to 15 minute sessions, instant restart) bots finish a match in about 6 minutes; two people should take 8 to 12. Play again from the results screen.
 - Rule 7: (per-player assists) each seat's own assist level applies to its own balls, which also works as a handicap.
+- Result: checks 1 to 5 and 7 to 10 pass against `engine/vendor-3d`; check 6 is skipped (versus). Bots average 146 at assist 0 and 190 at assist 2 over 10 seeds; median match 5.6 min. Scoring cases, roll-off, 1,000 random balls and 14 rematches checked by hand. Not checked: feel on real controllers, and frame rate on a real graphics card. PR #2, stacked on PR #1.
