@@ -18,8 +18,13 @@ const LW = 0.527, GW = 0.235, HEAD = 18.29, DECK = HEAD + 0.9, PIT = DECK + 1.2,
 const BR = 0.109, BM = 6.35, PM = 1.5, COG = 0.147, START = 0.3, STEP = 1 / 240, HOOK = 1.6, DRIFT = 1.5, AIM = 40;
 const NAME = ['Blue', 'Amber'], RAD = Math.PI / 180, ONE = new CANNON.Vec3(1, 1, 1);
 const SPOTS = []; for (let r = 0; r < 4; r++) for (let i = 0; i <= r; i++) SPOTS.push({ x: (i - r / 2) * SP, d: HEAD + r * ROW });
-const grip = d => (d < 12 ? 0.15 : d < 13 ? 0.15 + 0.85 * (d - 12) : 1);          // oil for 12 m, dry boards after 13
-const speedOf = pw => 6.5 + ((pw - 0.55) / 0.45) * 3;                              // 55% to 100% power is 6.5 to 9.5 m/s
+// Three balls: a light one swings faster and hooks more; a heavy one is slower, hooks less and carries pins better.
+const BALLS = [{ name: 'Light', kg: 5.4, lo: 7, hi: 10, hook: 1.3 }, { name: 'Medium', kg: 6.35, lo: 6.5, hi: 9.5, hook: 1 }, { name: 'Heavy', kg: 7.25, lo: 6, hi: 8.8, hook: 0.78 }];
+// Each match draws an oil pattern: the ball skids on the oil and hooks once it reaches the dry boards.
+const OILS = [{ name: 'Short', len: 10, note: 'the hook bites early' }, { name: 'House', len: 12, note: 'the hook bites on the last third' }, { name: 'Long', len: 14, note: 'the hook bites late' }];
+const grip = (d, oil = 12) => (d < oil ? 0.15 : d < oil + 1 ? 0.15 + 0.85 * (d - oil) : 1);
+const speedOf = (pw, ball = BALLS[1]) => ball.lo + ((pw - 0.55) / 0.45) * (ball.hi - ball.lo);   // 55% to 100% power across the ball's range
+const HECKLES = ['Gutter ball!', 'No pressure', 'Choke!', 'Wobbly arm', 'Split incoming', 'Easy does it', "Don't miss", 'Is that it?'];
 
 // ---- Sounds this game adds ---------------------------------------------------------------------
 Object.assign(Sfx.bank, {
@@ -29,6 +34,7 @@ Object.assign(Sfx.bank, {
   'tg-gutter': (S, o) => { S.noise(0.3, { freq: 240, q: 0.9, vol: 0.2, ...o }); S.tone(160, 0.3, { to: 80, type: 'sawtooth', vol: 0.08, ...o }); },
   'tg-strike': (S, o) => [523, 659, 784, 1047, 1319].forEach((f, i) => S.tone(f, 0.16, { delay: i * 0.07, vol: 0.2, ...o })),
   'tg-spare': (S, o) => [523, 784, 1047].forEach((f, i) => S.tone(f, 0.14, { delay: i * 0.08, vol: 0.16, ...o })),
+  'tg-heckle': (S, o) => { S.tone(240, 0.32, { type: 'sawtooth', to: 140, vol: 0.1, ...o }); S.tone(250, 0.32, { type: 'square', to: 145, vol: 0.05, ...o }); S.noise(0.3, { freq: 600, q: 3, vol: 0.06, ...o }); },
   'tg-sweep': (S, o) => S.noise(0.5, { freq: 420, q: 0.6, vol: 0.08, ...o }),
 });
 
@@ -88,10 +94,10 @@ function isSplit(up) {                                         // head pin down,
   return seen.size < up.length;
 }
 // Where a ball will go, ignoring pins: the same hook formula the physics uses. spin is a number or a function of time.
-function trace(x, d, vx, vd, spin, open) {
+function trace(x, d, vx, vd, spin, open, hook = HOOK, oil = 12) {
   const pts = [{ x, d }], dt = 1 / 60;
   for (let n = 0, t = 0; n < 2000 && d < HEAD - BR && (open || Math.abs(x) <= LW); n++, t += dt) {
-    vx += (typeof spin === 'function' ? spin(t) : spin) * grip(d) * HOOK * dt; x += vx * dt; d += vd * dt;
+    vx += (typeof spin === 'function' ? spin(t) : spin) * grip(d, oil) * hook * dt; x += vx * dt; d += vd * dt;
     if (n % 3 === 2) pts.push({ x, d });
   }
   pts.push({ x, d }); return pts;
@@ -118,7 +124,7 @@ class Phys {
       if (n.dot(mid.vsub(new C.Vec3(0, (0.135 - COG) * f.length, 0))) < 0) f.reverse();
     }
     this.belly = () => new C.ConvexPolyhedron({ vertices: verts.map(v => v.clone()), faces: faces.map(f => f.slice()) });
-    this.clacks = []; this.t = 0; this.acc = 0; this.live = false; this.hit = false; this.gutter = false; this.spin = 0; this.bumpers = false;
+    this.oil = 12; this.hookK = HOOK; this.clacks = []; this.t = 0; this.acc = 0; this.live = false; this.hit = false; this.gutter = false; this.spin = 0; this.bumpers = false;
     // The ball is a sphere to the boards and walls, and an upright drum of the same radius to the pins, so it ploughs through them instead of climbing.
     this.ball = new C.Body({ mass: BM, material: mB, linearDamping: 0, fixedRotation: true, collisionFilterGroup: 4, collisionFilterMask: 3, allowSleep: false });
     const round = new C.Sphere(BR), drum = new C.Cylinder(BR, BR, 0.26, 14); round.collisionFilterGroup = 8; round.collisionFilterMask = 1; drum.collisionFilterGroup = 4; drum.collisionFilterMask = 2;
@@ -149,8 +155,8 @@ class Phys {
     });
   }
   take(b, loose) { if (b.on) { this.w.removeBody(b); b.on = false; } b.loose = !!loose; }
-  bowl(x, ang, v, bumpers) {
-    const b = this.ball, a = ang * RAD;
+  bowl(x, ang, v, bumpers, ball = BALLS[1]) {
+    const b = this.ball, a = ang * RAD; b.mass = ball.kg; b.updateMassProperties(); this.hookK = HOOK * ball.hook;
     b.position.set(x, BR, -START); b.quaternion.set(0, 0, 0, 1); b.velocity.set(v * Math.sin(a), 0, -v * Math.cos(a));
     b.angularVelocity.set(0, 0, 0); b.collisionFilterMask = 3; b.loose = false;
     if (!b.on) { this.w.addBody(b); b.on = true; }
@@ -171,7 +177,7 @@ class Phys {
         if (this.bumpers && !this.gutter && d < DECK && Math.abs(p.x) > edge) { const s = Math.sign(p.x); p.x = s * edge; if (b.velocity.x * s > 0) b.velocity.x *= -0.7; }
         if (!this.gutter && d < DECK && Math.abs(p.x) > LW) { this.gutter = true; b.collisionFilterMask = 1; }
         if (this.gutter) { if (d < DECK) b.velocity.x = (Math.sign(p.x) * (LW + GW / 2) - p.x) * 12; }
-        else if (d < HEAD) b.velocity.x += this.spin * grip(d) * HOOK * STEP;
+        else if (d < HEAD) b.velocity.x += this.spin * grip(d, this.oil) * this.hookK * STEP;
         if (p.y > BR) p.y = BR; if (b.velocity.y > 0) b.velocity.y = 0;                              // a bowling ball ploughs through; it does not climb the pins
         this.slow = b.velocity.lengthSquared() < 0.04 ? this.slow + STEP : 0;
         if (this.slow > 1) this.drop();
@@ -211,7 +217,7 @@ function smooth(pts, per) {                                    // Catmull-Rom th
   out.push(pts[pts.length - 1]); return out;
 }
 class View {
-  constructor() {
+  constructor(OL = 12) {
     const cv = this.cv = document.createElement('canvas'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
     if (!gl) throw new Error('no WebGL');
     const r = this.r = new THREE.WebGLRenderer({ canvas: cv, context: gl }); r.setPixelRatio(1);
@@ -276,7 +282,7 @@ class View {
     // Oil: glossy and more reflective for 12 m, then dry boards. Green carries roughness; the alpha map sets how much reflection shows.
     const [rt, rc] = canvas(4, 512), [at, ac] = canvas(4, 512), ry = d => (1 - (d + 1.5) / len) * 512;
     for (let y = 0; y < 512; y++) {
-      const d = (1 - y / 512) * len - 1.5, oil = d < 0 ? 0 : d < 12 ? 1 : d < 13.5 ? 1 - (d - 12) / 1.5 : 0, deckd = d > HEAD - 0.5 ? 1 : 0;
+      const d = (1 - y / 512) * len - 1.5, oil = d < 0 ? 0 : d < OL ? 1 : d < OL + 1.5 ? 1 - (d - OL) / 1.5 : 0, deckd = d > HEAD - 0.5 ? 1 : 0;
       const rough = d < 0 ? 0.5 : 0.52 - 0.4 * oil + 0.06 * deckd, alpha = d < 0 ? 0.97 : 0.95 - 0.1 * oil;
       rc.fillStyle = `rgb(0,${Math.round(rough * 255)},0)`; rc.fillRect(0, y, 4, 1); ac.fillStyle = `rgb(0,${Math.round(alpha * 255)},0)`; ac.fillRect(0, y, 4, 1);
     }
@@ -508,10 +514,11 @@ class View {
     if (want !== this.size) { this.size = want; this.r.setSize(want, Math.round(want * 9 / 16), false); }
     this.neighbours(Math.min(dt, 0.05)); this.display(g);
     const ph = g.ph, st = g.state, c = g.cur ? g.cur.c : 0, onLane = p => Math.abs(p.x) < LW - 0.02 && -p.z < DECK && -p.z > -1.4 && p.y > -0.05;
-    const sink = (p, from) => 0.048 * U.clamp((Math.abs(p.x) - from) / 0.06, 0, 1);
+    const sink = (p, from) => 0.048 * U.clamp((Math.abs(p.x) - from) / 0.06, 0, 1), RF = st === 'replay' ? g.rpFrame : null;
     ph.pins.forEach((b, i) => {
-      const m = this.pins[i], mm = this.mpins[i]; m.visible = b.on || b.loose;
-      if (m.visible) { m.position.copy(b.position); m.position.y -= sink(b.position, LW + 0.02); m.quaternion.copy(b.quaternion); }
+      const m = this.pins[i], mm = this.mpins[i]; m.visible = RF ? RF[i * 8 + 7] > 0 : b.on || b.loose;
+      if (m.visible && RF) { m.position.set(RF[i * 8], RF[i * 8 + 1], RF[i * 8 + 2]); m.quaternion.set(RF[i * 8 + 3], RF[i * 8 + 4], RF[i * 8 + 5], RF[i * 8 + 6]); m.position.y -= sink(m.position, LW + 0.02); }
+      else if (m.visible) { m.position.copy(b.position); m.position.y -= sink(b.position, LW + 0.02); m.quaternion.copy(b.quaternion); }
       mm.visible = m.visible && onLane(b.position); if (mm.visible) { mm.position.copy(m.position); mm.quaternion.copy(m.quaternion); }
     });
     const ball = this.ball; ball.material = this.mball.material = this.skins[c]; this.strip.material.color.set(T.p[c]); for (const l of this.leds) l.material.color.set(T.p[c]); this.ledGlow.color.set(T.p[c]).multiplyScalar(0.45); this.dglowMat.color.set(T.p[c]).multiplyScalar(0.15);
@@ -519,6 +526,10 @@ class View {
     if (st === 'stance' || st === 'swing' || st === 'intro') {
       const h = st === 'swing' ? Math.min(1, g.sw.t / 0.8) : 0, e = h * h * (3 - 2 * h);
       ball.visible = st !== 'intro'; ball.position.set(g.x0, BR + 0.02 + e * 0.5, -START + e * 0.55); ball.quaternion.setFromAxisAngle(this.axis.set(1, 0, 0), -e * 2.2 - 0.6);
+    } else if (RF) {                                            // replay: place the ball from the recording and roll it by how far it moved
+      ball.visible = RF[87] > 0; const px = RF[80], pz = RF[82], dx = px - ball.position.x, dz = pz - ball.position.z, sp = Math.hypot(dx, dz);
+      ball.position.set(px, RF[81], pz); ball.position.y -= sink(ball.position, LW - 0.03);
+      if (sp > 1e-4 && sp < 0.5) { this.axis.set(-dz / sp, 0, dx / sp); ball.quaternion.premultiply(this.turn.setFromAxisAngle(this.axis, -sp / BR)); }
     } else {
       const b = ph.ball; ball.visible = b.on || b.loose;
       if (ball.visible) {
@@ -540,7 +551,8 @@ class View {
     gp.needsUpdate = true; this.guide.geometry.setDrawRange(0, Math.max(0, (n - 1) * 6));
     // camera: Stance, Chase, Deck
     let px = g.x0 * 0.6, py = 1.7, pz = 4.6, lx = g.x0 * 0.25, ly = 0.1, lz = -6, rate = 3;
-    if (st === 'roll' || st === 'show') {
+    if (st === 'replay') { const t = Math.min(g.t, 6); px = 0.5 - t * 0.06; py = 0.3 + t * 0.012; pz = -(HEAD - 2.8 + t * 0.2); lx = 0; ly = 0.17; lz = -(HEAD + 0.3); rate = 9; }   // low inside the lane, pushing in slowly
+    else if (st === 'roll' || st === 'show') {
       const b = ph.ball.position;
       if (ph.hit || st === 'show' || !ph.live) { px = 0.5; py = 0.66; pz = -(HEAD - 2.7); lx = 0; ly = 0.2; lz = -(HEAD + 0.45); rate = 4; }
       else { px = b.x * 0.7; py = 0.85; pz = Math.max(b.z + 2.6, -(HEAD - 4)); lx = b.x * 0.4; ly = 0.15; lz = Math.min(b.z - 7, -(HEAD - 0.5)); rate = 6; }
@@ -560,9 +572,11 @@ class Grudge {
     this.P = [0, 1].map(n => { const seat = k.players[two ? n : 0]; return { n, seat, c: two ? seat.index : n, rolls: [], x0: 0, aim: 0, streak: 0, splits: 0, fast: 0, botN: -1 }; });
     const first = sv.lastLoser === 0 || sv.lastLoser === 1 ? this.P.findIndex(p => p.c !== sv.lastLoser) : k.rng() < 0.5 ? 0 : 1;
     this.order = [first, 1 - first]; this.ro = []; this.ph = new Phys(k.rng); this.fx = new k.Particles(300);
+    this.oil = OILS[Math.floor(k.rng() * OILS.length)]; this.ph.oil = this.oil.len; this.rec = []; this.heckle = null; this.heckleT = 0; this.heckles = 0;
+    for (const q of this.P) q.ball = sv.balls && sv.balls[q.c] != null ? sv.balls[q.c] : 1;
     this.state = 'intro'; this.t = 0; this.n = 0; this.cur = this.P[first]; this.x0 = 0; this.aim = 0; this.sw = { t: 0, idle: 0 }; this.spin = 0; this.meter = 0;
     this.call = null; this.banner = null; this.rollT = 0; this.rep = 0; this.leave = 0; this.view = null;
-    if (!k.sim) { try { this.view = new View(); } catch (e) { this.view = null; } }
+    if (!k.sim) { try { this.view = new View(this.oil.len); } catch (e) { this.view = null; } }
     this.ph.rack();
   }
   assist(p) { return this.k.assist(p.seat.index); }
@@ -580,15 +594,15 @@ class Grudge {
     const need = turn.ro ? 10 : standing(p.rolls);
     if (need === 10 || changed) this.ph.rack(); else this.ph.tidy();
     this.fresh = need === 10; this.x0 = p.x0; this.aim = p.aim; this.spin = 0; this.sw.t = 0; this.state = 'stance'; this.t = 0;
-    if (changed) { this.banner = { t: 1.6, c: p.c, text: NAME[p.c] + ' to bowl', sub: turn.ro ? 'Roll-off, ball ' + turn.ro : 'Frame ' + (turn.f + 1) }; Sfx.play('ready', { pitch: p.c ? 0.9 : 1.1 }); }
+    if (changed) { this.heckles = 0; this.banner = { t: 1.6, c: p.c, text: NAME[p.c] + ' to bowl', sub: turn.ro ? 'Roll-off, ball ' + turn.ro : 'Frame ' + (turn.f + 1) }; Sfx.play('ready', { pitch: p.c ? 0.9 : 1.1 }); }
   }
   guide() {                                                    // the aim line, as far as this seat's assist shows it
     const p = this.cur, a = this.assist(p), ph = this.ph;
     if (this.state === 'stance' || this.state === 'swing') {
-      const ang = this.aim / 10 * RAD, pts = trace(this.x0, START, Math.sin(ang) * 8, Math.cos(ang) * 8, 0);
+      const ang = this.aim / 10 * RAD, pts = trace(this.x0, START, Math.sin(ang) * 8, Math.cos(ang) * 8, 0, false, HOOK * BALLS[p.ball].hook, this.oil.len);
       return a === 0 ? pts.filter(q => q.d <= 4.7) : pts;
     }
-    if (this.state === 'roll' && a === 2 && ph.live && !ph.hit && !ph.gutter) { const b = ph.ball; return trace(b.position.x, -b.position.z, b.velocity.x, -b.velocity.z, this.spin); }
+    if (this.state === 'roll' && a === 2 && ph.live && !ph.hit && !ph.gutter) { const b = ph.ball; return trace(b.position.x, -b.position.z, b.velocity.x, -b.velocity.z, this.spin, false, HOOK * BALLS[p.ball].hook, this.oil.len); }
     return [];
   }
   update(dt) {
@@ -597,8 +611,22 @@ class Grudge {
     if (this.call && (this.call.t -= dt) <= 0) this.call = null;
     if (this.state === 'intro') { if (this.t > 2 || this.P.some(q => q.seat.pressed('a'))) this.begin(); return; }
     if (this.state === 'over') { if (this.t > 1.6) this.finish(); return; }
+    // the player who is waiting can heckle: a jeer, a bubble and a buzz in the bowler's hands. It never touches the ball.
+    this.heckleT -= dt; if (this.heckle && (this.heckle.t -= dt) <= 0) this.heckle = null;
+    if (['stance', 'swing', 'roll'].includes(this.state)) for (const q of this.P) {
+      if (q === p || q.seat === s || !q.seat.pressed('x') || this.heckleT > 0 || this.heckles >= 3) continue;
+      this.heckle = { t: 1.8, c: q.c, text: HECKLES[Math.floor(k.rng() * HECKLES.length)] }; this.heckleT = 2.5; this.heckles++;
+      Sfx.play('tg-heckle', { pan: q.c ? 0.6 : -0.6 }); s.rumble(0.35, 220, 0.6);
+    }
+    if (this.state === 'replay') {
+      const n = this.rp0 + Math.floor(this.t * 60 * 0.4);
+      if (n >= this.rec.length || this.t > 9 || this.P.some(q => !q.seat.bot && q.seat.pressed('a'))) { this.rpFrame = null; Sfx.play('tg-sweep'); this.begin(); }
+      else this.rpFrame = this.rec[n];
+      return;
+    }
     if (this.state === 'stance') {
       const key = s.type === 'kb' || s.type === 'touch';
+      if (s.pressed('y')) { p.ball = (p.ball + 1) % BALLS.length; if (!k.save.balls) k.save.balls = [1, 1]; k.save.balls[p.c] = p.ball; Sfx.play('select', { pitch: [1.25, 1, 0.8][p.ball] }); }
       this.x0 = U.clamp(this.x0 + s.move.x * 0.45 * dt, -0.45, 0.45); this.rep -= dt;
       for (const [btn, dir] of [['lb', -1], ['rb', 1]]) if (s.pressed(btn) || (s.held(btn) > 0.35 && this.rep <= 0)) { this.aim = U.clamp(this.aim + dir, -AIM, AIM); this.rep = 1 / 15; Sfx.play('tick'); }
       if (key ? s.pressed('a') : s.aim.y > 0.6) { this.state = 'swing'; this.sw.t = 0; this.sw.idle = 0; }
@@ -614,8 +642,13 @@ class Grudge {
     }
     if (this.state === 'roll') {
       const was = ph.hit, gut = ph.gutter, mx = s.move.x;
-      if (ph.live && !ph.hit && !ph.gutter && this.meter > 0 && Math.abs(mx) > 0.15) { this.spin = U.clamp(this.spin + mx * 1.25 * dt, -1, 1); this.meter -= Math.abs(mx) * dt; if (this.t - this.rollT > 0.09) s.rumble(0.12 + 0.3 * grip(-ph.ball.position.z), 90, 0.2); }
+      if (ph.live && !ph.hit && !ph.gutter && this.meter > 0 && Math.abs(mx) > 0.15) { this.spin = U.clamp(this.spin + mx * 1.25 * dt, -1, 1); this.meter -= Math.abs(mx) * dt; if (this.t - this.rollT > 0.09) s.rumble(0.12 + 0.3 * grip(-ph.ball.position.z, this.oil.len), 90, 0.2); }
       ph.spin = this.spin; ph.advance(dt);
+      if (!k.sim && ph.t - (this.recT || 0) >= 1 / 60) {         // keep a copy of the ball for a strike replay: position, rotation and shown, per body
+        this.recT = ph.t; const f = new Float32Array(89); f[88] = ph.t;
+        [...ph.pins, ph.ball].forEach((b, i) => { const q = b.position, r = b.quaternion; f.set([q.x, q.y, q.z, r.x, r.y, r.z, r.w, b.on || b.loose ? 1 : 0], i * 8); });
+        this.rec.push(f);
+      }
       if (ph.live && !ph.gutter && this.t - this.rollT > 0.11) { this.rollT = this.t; const b = ph.ball; Sfx.play('tg-roll', { pitch: 0.7 + b.velocity.length() / 14, pan: U.clamp(b.position.x / LW, -1, 1) * 0.6 }); }
       if (ph.gutter && !gut) { Sfx.play('tg-gutter'); s.rumble(0.5, 90); k.after(0.16, () => s.rumble(0.5, 90)); }
       if (ph.hit && !was) { if (this.fresh && Math.abs(Math.abs(ph.hitX) - 0.07) < 0.045) k.slowmo(0.35, 0.5); }
@@ -624,14 +657,17 @@ class Grudge {
       if (ph.settled()) this.score(ph.read().length);
       return;
     }
-    if (this.state === 'show' && this.t > this.hold) { Sfx.play('tg-sweep'); this.begin(); }
+    if (this.state === 'show' && this.t > this.hold) {
+      if (this.replayNext) { this.replayNext = false; this.state = 'replay'; this.t = 0; const from = this.ph.hitT - 0.7; this.rp0 = Math.max(0, this.rec.findIndex(f => f[88] >= from)); return; }
+      Sfx.play('tg-sweep'); this.begin();
+    }
   }
   release(drift) {
     const p = this.cur, a = this.assist(p), sw = this.sw, floor = a === 2 ? 0.7 : 0.55;
     let pw = 0.55 + 0.45 * Math.min(1, sw.t / 0.8); if (sw.t > 1.2) pw -= 0.2 * (sw.t - 1.2); pw = U.clamp(pw, floor, 1);
-    const v = speedOf(pw), ang = this.aim / 10 + U.clamp(drift, -1, 1) * DRIFT * [1, 0.5, 0.25][a];
+    const v = speedOf(pw, BALLS[p.ball]), ang = this.aim / 10 + U.clamp(drift, -1, 1) * DRIFT * [1, 0.5, 0.25][a];
     p.x0 = this.x0; p.aim = this.aim; p.fast = Math.max(p.fast, v * 3.6); this.power = pw; this.kmh = v * 3.6;
-    this.ph.bowl(this.x0, ang, v, a === 2); this.meter = a ? 1 : 0.8; this.spin = 0; this.state = 'roll'; this.t = 0; this.rollT = 0;
+    this.rec = []; this.recT = 0; this.ph.bowl(this.x0, ang, v, a === 2, BALLS[p.ball]); this.meter = a ? 1 : 0.8; this.spin = 0; this.state = 'roll'; this.t = 0; this.rollT = 0;
     Sfx.play('tg-release'); p.seat.rumble(0.4 + 0.4 * (pw - 0.55) / 0.45, 120);
   }
   score(count) {                                               // a ball has settled: mark the card and say what happened
@@ -648,6 +684,7 @@ class Grudge {
     if (!this.fresh) p.split = false;
     else if ((p.split = !strike && !turn.ro && isSplit(ph.up))) { text = 'Split'; sub = ph.up.map(i => i + 1).join('-'); }
     this.call = { t: big ? 2.2 : 1.6, max: big ? 2.2 : 1.6, text, sub, c: p.c }; this.hold = big ? 2.3 : 1.7; this.state = 'show'; this.t = 0;
+    this.replayNext = strike && !k.sim && this.ph.hit && this.rec.length > 20;
     if (strike) { Sfx.play('tg-strike'); k.hitstop(0.06); k.shake(0.5); for (const q of this.P) q.seat.rumble(0.9, 260); this.fx.burst(W / 2, 330, 90, { color: T.p[p.c], speed: [240, 900], life: 1.1, size: 9 }); this.fx.burst(W / 2, 330, 40, { color: T.text, speed: [200, 700], life: 0.9, size: 6 }); }
     else if (spare) { Sfx.play('tg-spare'); this.fx.burst(W / 2, 330, 40, { color: T.p[p.c], speed: [200, 600], life: 0.8, size: 7 }); }
   }
@@ -671,13 +708,13 @@ class Grudge {
     if (this.state === 'intro') return;
     if (this.state === 'stance') {
       if (p.botN !== this.n) {                                 // plan this ball once
-        p.botN = this.n; const up = this.ph.up, hold = U.clamp(0.53 + U.gauss(rng) * 0.05, 0.3, 0.8), v = speedOf(0.55 + 0.45 * hold / 0.8);
+        p.botN = this.n; const up = this.ph.up, hold = U.clamp(0.53 + U.gauss(rng) * 0.05, 0.3, 0.8), v = speedOf(0.55 + 0.45 * hold / 0.8, BALLS[p.ball]);
         let xt, spin = 0;
         if (this.fresh) { xt = 0.068; spin = -0.6; }
         else { const lead = up.reduce((m, i) => (SPOTS[i].d < SPOTS[m].d ? i : m), up[0]), cx = up.reduce((t, i) => t + SPOTS[i].x, 0) / up.length; xt = SPOTS[lead].x + U.clamp(cx - SPOTS[lead].x, -0.045, 0.045); }
         const ramp = t => Math.max(spin, -1.25 * t), pref = this.fresh ? 0.2 : xt * 0.5; let best = null;
         for (let a = -AIM; a <= AIM; a++) {
-          const pts = trace(0, START, Math.sin(a / 10 * RAD) * v, Math.cos(a / 10 * RAD) * v, ramp, true), x0 = xt - pts[pts.length - 1].x;
+          const pts = trace(0, START, Math.sin(a / 10 * RAD) * v, Math.cos(a / 10 * RAD) * v, ramp, true, HOOK * BALLS[p.ball].hook, this.oil.len), x0 = xt - pts[pts.length - 1].x;
           if (Math.abs(x0) <= 0.42 && (!best || Math.abs(x0 - pref) < Math.abs(best.x0 - pref))) best = { a, x0 };
         }
         best = best || { a: 0, x0: U.clamp(xt, -0.42, 0.42) };
@@ -710,21 +747,23 @@ class Grudge {
     const p = this.cur, s = p.seat, col = T.p[p.c], st = this.state;
     if (st === 'intro') {
       const sv = k.save, w = sv.wins || [0, 0];
-      G.panel(W / 2 - 430, 420, 860, 230); G.text('Tenpin Grudge', W / 2, 500, { size: FS.lg, weight: 700, align: 'center' });
+      G.panel(W / 2 - 430, 420, 860, 260); G.text('Tenpin Grudge', W / 2, 500, { size: FS.lg, weight: 700, align: 'center' });
       G.marker(p.c, W / 2 - 150, 556, 12); G.text(NAME[p.c] + ' bowls first', W / 2 - 124, 566, { size: FS.sm, color: col, weight: 700 });
-      G.text(`Matches so far: Blue ${w[0]}, Amber ${w[1]}, drawn ${sv.draws || 0}`, W / 2, 618, { size: FS.xs, color: T.muted, align: 'center' });
+      G.text(`${this.oil.name} oil tonight: ${this.oil.note}`, W / 2, 612, { size: FS.xs, align: 'center' });
+      G.text(`Matches so far: Blue ${w[0]}, Amber ${w[1]}, drawn ${sv.draws || 0}`, W / 2, 648, { size: FS.xs, color: T.muted, align: 'center' });
     }
     if (st === 'stance' || st === 'swing') {
-      const x = 60, y = H - 178, cm = Math.round(Math.abs(this.x0) * 100), deg = (Math.abs(this.aim) / 10).toFixed(1), key = s.type === 'kb' || s.type === 'touch';
-      G.panel(x, y, 600, 150); G.marker(p.c, x + 36, y + 42, 11); G.eyebrow(NAME[p.c] + (this.turn.ro ? ' · roll-off' : ` · frame ${this.turn.f + 1} · ball ${this.turn.b + 1}`), x + 60, y + 50, { color: col });
+      const x = 60, y = H - 214, cm = Math.round(Math.abs(this.x0) * 100), deg = (Math.abs(this.aim) / 10).toFixed(1), key = s.type === 'kb' || s.type === 'touch';
+      G.panel(x, y, 600, 186); G.marker(p.c, x + 36, y + 42, 11); G.eyebrow(NAME[p.c] + (this.turn.ro ? ' · roll-off' : ` · frame ${this.turn.f + 1} · ball ${this.turn.b + 1}`), x + 60, y + 50, { color: col });
       G.text(cm ? `Standing ${cm} cm ${this.x0 < 0 ? 'left' : 'right'}` : 'Standing in the centre', x + 30, y + 94, { size: FS.xs, weight: 500 });
       G.text(this.aim ? `Aiming ${deg}° ${this.aim < 0 ? 'left' : 'right'}` : 'Aiming straight', x + 30, y + 128, { size: FS.xs, weight: 500 });
-      SPOTS.forEach((q, i) => { const on = this.ph.up.includes(i), px = x + 492 + q.x / SP * 30, py = y + 114 - (q.d - HEAD) / ROW * 26; G.circle(px, py, 10, on ? '#F4F2EC' : null, on ? null : T.line2, 2); });   // the pins still standing
-      const hx = W - 60 - 660, hy = H - 178, opt = key ? { names: s.device && s.device.names } : {};
-      G.panel(hx, hy, 660, 150);
+      const bl = BALLS[p.ball]; G.text(`${bl.name} ball, ${bl.kg} kg · ${this.oil.name} oil`, x + 30, y + 162, { size: FS.xs, weight: 500, color: col });
+      SPOTS.forEach((q, i) => { const on = this.ph.up.includes(i), px = x + 492 + q.x / SP * 30, py = y + 132 - (q.d - HEAD) / ROW * 26; G.circle(px, py, 10, on ? '#F4F2EC' : null, on ? null : T.line2, 2); });   // the pins still standing
+      const hx = W - 60 - 660, hy = H - 214, opt = key ? { names: s.device && s.device.names } : {};
+      G.panel(hx, hy, 660, 186);
       const rows = st === 'swing' ? [[[key ? 'a' : 'aim', key ? 'Let go to bowl' : 'Push forward to bowl, straight']], [['b', 'Cancel the swing']]]
-        : [[['move', 'Step sideways'], [key ? 'a' : 'aim', key ? 'Hold to swing' : 'Pull back to swing']], [['lb', 'Aim left'], ['rb', 'Aim right']]];
-      rows.forEach((r, i) => G.hints(hx + 30, hy + 48 + i * 58, r, s.type, opt));
+        : [[['move', 'Step sideways'], [key ? 'a' : 'aim', key ? 'Hold to swing' : 'Pull back to swing']], [['lb', 'Aim left'], ['rb', 'Aim right']], [['y', 'Change ball']]];
+      rows.forEach((r, i) => G.hints(hx + 30, hy + 44 + i * 50, r, s.type, opt));
     }
     if (st === 'swing') {                                      // swing height, with the floor and the top marked, and the drift needle
       const sw = this.sw, a = this.assist(p), floor = a === 2 ? 0.7 : 0.55, x = W - 230, y = 380, h = 330;
@@ -749,6 +788,18 @@ class Grudge {
       const a = U.clamp(Math.min(b.t / 0.3, (1.6 - b.t) / 0.2), 0, 1), w = 560; c.globalAlpha = a;
       G.rrect(W / 2 - w / 2, 236, w, 104, 52, 'rgba(7,9,13,0.9)', T.p[b.c], 3); G.marker(b.c, W / 2 - w / 2 + 56, 288, 15);
       G.text(b.text, W / 2 - w / 2 + 92, 284, { size: FS.md, weight: 700 }); G.text(b.sub, W / 2 - w / 2 + 92, 320, { size: FS.xs, color: T.muted }); c.globalAlpha = 1;
+    }
+    const hk = this.heckle;
+    if (hk) {                                                  // the heckle, from the waiting player's side of the screen
+      const a = U.clamp(Math.min(hk.t / 0.25, (1.8 - hk.t) / 0.12), 0, 1), w = G.measure(hk.text, { size: FS.md, weight: 700 }) + 110, x = hk.c ? W - 80 - w : 80, y = 300;
+      c.globalAlpha = a; G.rrect(x, y, w, 76, 38, 'rgba(7,9,13,0.92)', T.p[hk.c], 3);
+      c.beginPath(); c.moveTo(x + (hk.c ? w - 70 : 70), y + 74); c.lineTo(x + (hk.c ? w - 40 : 40), y + 104); c.lineTo(x + (hk.c ? w - 100 : 100), y + 74); c.fillStyle = T.p[hk.c]; c.fill();
+      G.marker(hk.c, x + 40, y + 38, 12); G.text(hk.text, x + 68, y + 50, { size: FS.md, weight: 700, color: T.p[hk.c] }); c.globalAlpha = 1;
+    }
+    if (st === 'replay') {
+      const w = 520, x = (W - w) / 2, y = H - 132; G.panel(x, y, w, 96);
+      G.circle(x + 40, y + 48, 9, Math.floor(this.t * 2) % 2 ? T.bad : 'rgba(240,97,109,0.4)');
+      G.text('Strike replay', x + 64, y + 58, { size: FS.sm, weight: 700 }); G.hints(x + w - 150, y + 48, [['a', 'Skip']], Couch.Input.lastType);
     }
     const q = this.call;
     if (q) {
@@ -810,10 +861,10 @@ class Grudge {
 Couch.register({
   id: 'tenpin-grudge', players: 2, bots: true, best: 'high', scoreLabel: 'Winning score',
   line: 'Ten-pin bowling, head to head, in 3D.',
-  how: ['Take turns, one frame each. The higher score after ten frames wins.',
-    'Pull the right stick back, then push it forward to bowl. A straight push is an accurate ball.',
-    'Steer the hook with the left stick while the ball rolls. It bites on the last third of the lane.'],
-  controls: [['move', 'Step sideways, then hook the rolling ball'], ['lb', 'Aim left'], ['rb', 'Aim right'], ['aim', 'Pull back and push forward to bowl'], ['b', 'Cancel the swing'], ['start', 'Pause']],
+  how: ['Take turns, one frame each; higher score after ten frames wins. X heckles while you wait.',
+    'Pull the right stick back, then push it forward to bowl. Y picks a light, medium or heavy ball.',
+    'Steer the hook with the left stick while the ball rolls. Each match draws a short, house or long oil.'],
+  controls: [['move', 'Step sideways, then hook the rolling ball'], ['lb', 'Aim left'], ['rb', 'Aim right'], ['aim', 'Pull back and push forward to bowl'], ['b', 'Cancel the swing'], ['y', 'Change ball, before you bowl'], ['x', 'Heckle, while the other player bowls'], ['a', 'Skip a replay'], ['start', 'Pause']],
   assistText: ['', 'Longer guide line, steadier release, more hook', 'Live path preview, bumpers up, steadiest release'],
   create: k => new Grudge(k),
 });

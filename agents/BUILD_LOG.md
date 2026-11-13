@@ -98,3 +98,17 @@ line below, each followed by text.
 - Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
 - Rule 6: (3 to 15 minute sessions, instant restart) unchanged.
 - Rule 7: (per-player assists) unchanged.
+
+## 2026-11-14 · tenpin-grudge · polish
+- Scope: gameplay, at Marco's request ("work on gameplay elements"), taken from the spec's Later list: a choice of three balls, an oil pattern per match, heckles for the waiting player, and a replay after every strike.
+- Kit: as before.
+- Two-player action: still a versus match. The waiting player can now heckle with X: a jeer, a speech bubble and a short buzz in the bowler's controller, three per turn at most. It never touches the ball.
+- Hard part: keeping the new choices fair and repeatable. Ball weight sets the ball's mass, speed range and hook; the oil pattern (short 10 m, house 12 m, long 14 m) moves where the hook bites, drawn from `k.rng` so a seed repeats. The bot reads both when it plans, and averages 131 to 149 across all nine combinations. Replays are recorded only outside `Couch.simulate`, so they do not change balance runs.
+- Assists: unchanged; the guide line and path preview follow the chosen ball and the oil.
+- Rule 1: (one shared screen) unchanged; replays play on the shared screen and either player can skip with A.
+- Rule 2: (no hidden information) the ball and the oil are shown on the bowler's panel; the oil is also announced before the match.
+- Rule 3: (win and lose together) WAIVED by Marco for this slot, as before.
+- Rule 4: (revive, never eliminate) unchanged.
+- Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
+- Rule 6: (3 to 15 minute sessions, instant restart) bots still finish in about 6 minutes; replays add up to 8 seconds per strike with two people.
+- Rule 7: (per-player assists) unchanged.
