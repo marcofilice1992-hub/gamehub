@@ -34,6 +34,7 @@ The shipped file is assembled from the parts in `src/`:
 | `src/00-head.html` | Page shell |
 | `src/10-core.js` | Tokens, saves, sound and music, input (two seats, practice bot), drawing helpers |
 | `src/20-engine.js` | Camera, particles, loop, scenes, game plug-in API |
+| `src/15-vendor-3d.js` | three.js and cannon-es, vendored for 3D games as `Couch.lib.THREE` and `Couch.lib.CANNON`. Built by `tools/vendor.sh`, never edited by hand |
 | `src/25-kit.js` | World, tilemaps, platformer, rope, sprites, scripts, route finding, hex grids, lighting, interact and carry, choice cards, headless simulate |
 | `src/30-games.js` | The 15-slot manifest and the Test Range |
 | `src/35-lab.js` | Engine Lab |
@@ -42,6 +43,14 @@ The shipped file is assembled from the parts in `src/`:
 | `src/40-start.js` | Starts the engine |
 
 A new game is one more file in `src/` that calls `Couch.register({ id, create(k) { … } })` with the id of its slot, added to the list in `build.sh`.
+
+## 3D libraries
+
+Games that need 3D use two MIT-licensed libraries that are inlined into `master.html`, so nothing loads over the network:
+three.js 0.187.0 for drawing and cannon-es 0.20.0 for rigid-body physics. Together they add about 640 KB.
+`tools/vendor-entry.mjs` lists the classes that are included. To change the list or a version, edit it, run
+`./tools/vendor.sh` (needs Node and the npm registry), then `./build.sh`. A new physics version changes every seeded
+result, so re-run the baseline after an upgrade.
 
 ## Developer keys
 

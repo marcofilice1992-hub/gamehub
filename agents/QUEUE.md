@@ -21,6 +21,6 @@ A replacement of a game that is already built goes to the top of the queue.
 | 10 | 9 | big-and-small | build | Asymmetric pair |
 | 11 | 12 | deep-dive | build | Content-heavy; generation must always leave a route down |
 | 12 | 8 | heist-night | build | Content-heavy, the largest build |
-| 13 | 14 | slow-boat | build | Content-heavy; spec is open-ended, so a session must end at a delivery or voyage |
+| 13 | 14 | tenpin-grudge | replace slow-boat | Versus bowling in 3D, asked for by Marco in chat on 14 Nov 2026 and built there ahead of the queue. Rules 3 and 5 waived. Uses `Couch.lib` |
 
 Built before this queue existed: Tank for Two (slot 10), Swarm Night (slot 11).
