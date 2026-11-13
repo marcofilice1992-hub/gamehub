@@ -70,3 +70,17 @@ line below, each followed by text.
 - Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
 - Rule 6: (3 to 15 minute sessions, instant restart) unchanged.
 - Rule 7: (per-player assists) unchanged.
+
+## 2026-11-14 · tenpin-grudge · polish
+- Scope: refine the hall's lighting, at Marco's request ("refine environment"). No change to physics, scoring, controls or the bot.
+- Kit: as before, plus additive blending from the vendored three.js (added in PR #1).
+- Two-player action: unchanged. A versus match on one lane.
+- Hard part: coloured light without washing out the lane. The neon spills pink and violet onto the outer lanes from four short-range lights; a short-range light over the pin decks lights the neighbours' pins without streaking down lane 14; reflections now pick up the neon.
+- Assists: unchanged.
+- Rule 1: (one shared screen) unchanged.
+- Rule 2: (no hidden information) unchanged.
+- Rule 3: (win and lose together) WAIVED by Marco for this slot, as before.
+- Rule 4: (revive, never eliminate) unchanged.
+- Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
+- Rule 6: (3 to 15 minute sessions, instant restart) unchanged.
+- Rule 7: (per-player assists) unchanged.
