@@ -1,7 +1,7 @@
 // Entry for tools/vendor.sh. Lists the three.js and cannon-es classes that games may use, and hangs them on Couch.lib.
 // Add a class here, run tools/vendor.sh, then ./build.sh. Anything not listed is left out of master.html.
 import {
-  ACESFilmicToneMapping, AgXToneMapping, BackSide, MeshPhysicalMaterial, PCFShadowMap, PMREMGenerator, VSMShadowMap, AmbientLight, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color,
+  ACESFilmicToneMapping, AdditiveBlending, AgXToneMapping, BackSide, MeshPhysicalMaterial, PCFShadowMap, PMREMGenerator, VSMShadowMap, AmbientLight, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color,
   CylinderGeometry, DirectionalLight, DoubleSide, Euler, Float32BufferAttribute, Fog, Group, HemisphereLight, InstancedMesh,
   LatheGeometry, Line, LineBasicMaterial, LineSegments, MathUtils, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial,
   MeshStandardMaterial, Object3D, PerspectiveCamera, PlaneGeometry, PointLight, Quaternion, RepeatWrapping,
@@ -15,7 +15,7 @@ import {
 
 Couch.lib = {
   THREE: {
-    ACESFilmicToneMapping, AgXToneMapping, BackSide, MeshPhysicalMaterial, PCFShadowMap, PMREMGenerator, VSMShadowMap, AmbientLight, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color,
+    ACESFilmicToneMapping, AdditiveBlending, AgXToneMapping, BackSide, MeshPhysicalMaterial, PCFShadowMap, PMREMGenerator, VSMShadowMap, AmbientLight, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color,
     CylinderGeometry, DirectionalLight, DoubleSide, Euler, Float32BufferAttribute, Fog, Group, HemisphereLight, InstancedMesh,
     LatheGeometry, Line, LineBasicMaterial, LineSegments, MathUtils, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial,
     MeshStandardMaterial, Object3D, PerspectiveCamera, PlaneGeometry, PointLight, Quaternion, RepeatWrapping,
