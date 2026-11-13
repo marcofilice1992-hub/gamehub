@@ -42,3 +42,17 @@ line below, each followed by text.
 - Rule 6: (3 to 15 minute sessions, instant restart) bots finish a match in about 6 minutes; two people should take 8 to 12. Play again from the results screen.
 - Rule 7: (per-player assists) each seat's own assist level applies to its own balls, which also works as a handicap.
 - Result: checks 1 to 5 and 7 to 10 pass against `engine/vendor-3d`; check 6 is skipped (versus). Bots average 146 at assist 0 and 190 at assist 2 over 10 seeds; median match 5.6 min. Scoring cases, roll-off, 1,000 random balls and 14 rematches checked by hand. Not checked: feel on real controllers, and frame rate on a real graphics card. PR #2, stacked on PR #1.
+
+## 2026-11-14 · tenpin-grudge · polish
+- Scope: graphics only, at Marco's request ("make graphics better"). No change to physics, scoring, controls or the bot.
+- Kit: as before, plus `MeshPhysicalMaterial` and `PMREMGenerator`, added to the vendored three.js in PR #1.
+- Two-player action: unchanged. A versus match on one lane.
+- Hard part: a glossy lane without a reflection add-on. Pins and ball are drawn a second time, mirrored under the lane, and seen through a lane that is slightly see-through, more so on the oil. A generated environment map gives the ball, pins and lane their highlights.
+- Assists: unchanged. Strong assist's bumpers now show as rails in the bowler's colour.
+- Rule 1: (one shared screen) unchanged; neighbouring lanes 12, 13, 15 and 16 are scenery only.
+- Rule 2: (no hidden information) unchanged.
+- Rule 3: (win and lose together) WAIVED by Marco for this slot, as before.
+- Rule 4: (revive, never eliminate) unchanged.
+- Rule 5: (an action neither can do alone) WAIVED by Marco with rule 3, as before.
+- Rule 6: (3 to 15 minute sessions, instant restart) unchanged.
+- Rule 7: (per-player assists) unchanged.
