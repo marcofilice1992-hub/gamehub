@@ -75,6 +75,9 @@ Physics runs at 240 ticks a second. Hook and friction are applied every tick, so
 Pins and ball are drawn from the last few states the physics produced, on a smooth clock that runs at the lane's pace
 and sits three ticks (12 ms) behind, so they move evenly on a 60, 144 or 165 Hz screen and in slow motion, where the
 physics only steps on some ticks. Slow replays blend between recorded frames. The ball turns with the hand that holds it.
+The camera follows the ball as drawn, rides springs between shots, cuts (rather than flies) into and out of replays, to
+the bowler's reaction and back up the lane, and shakes with smooth noise. `physics_jitter_fix` is off, since the lane's
+own clock does that job.
 Every rack gets a fresh physics world, so the same shot on the same rack always counts the same pins.
 
 ## Checks

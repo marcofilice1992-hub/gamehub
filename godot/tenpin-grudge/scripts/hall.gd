@@ -14,6 +14,11 @@ var cam: Camera3D
 var env: Environment
 var pos := Vector3(0, 1.7, 4.6)
 var look := Vector3(0, 0.1, -6)
+var _cam_v := Vector3.ZERO            # the camera's velocity, and its look point's (it moves on springs)
+var _look_v := Vector3.ZERO
+var _cam_state := ""
+var _cam_react := false
+var _shake_t := 0.0
 var pins: Array = []                  # MeshInstance3D per pin, lane 14
 var ball: MeshInstance3D
 var ball_mats: Array = []
@@ -787,7 +792,7 @@ func _camera(dt: float) -> void:
 	elif st == "show" and m.t > m.react_from:              # turn round to the bowler for their reaction
 		var bw: Bowler = bowlers[m.cur.c]
 		var bp := bw.global_position
-		px = bp.x + 0.9; py = 1.5; pz = bp.z - 3.3; lx = bp.x - 0.25; ly = 1.2; lz = bp.z + 0.4; rate = 30.0 if m.t - m.react_from < 0.05 else 2.0
+		px = bp.x + 0.9; py = 1.5; pz = bp.z - 3.3; lx = bp.x - 0.25; ly = 1.2; lz = bp.z + 0.4; rate = 2.0
 	elif st == "replay":                                       # low inside the lane, pushing in slowly
 		var t := minf(m.t, 6.0)
 		px = 0.5 - t * 0.06; py = 0.3 + t * 0.012; pz = -(Tune.HEAD - 2.8 + t * 0.2)
@@ -798,15 +803,39 @@ func _camera(dt: float) -> void:
 		if ln.hit or not ln.live or ln.ball == null:
 			px = 0.5; py = 0.66; pz = -(Tune.HEAD - 2.7); lx = 0; ly = 0.2; lz = -(Tune.HEAD + 0.45); rate = 4
 		else:
-			var b := ln.ball.position
+			var b := ball.position                              # (the ball as drawn: the physics position moves in tick-sized hops)
 			px = b.x * 0.7; py = 0.85; pz = maxf(b.z + 2.6, -(Tune.HEAD - 4)); lx = b.x * 0.4; ly = 0.15; lz = minf(b.z - 7, -(Tune.HEAD - 0.5)); rate = 6
-	var k := 1 - exp(-rate * dt)
-	pos += (Vector3(px, py, pz) - pos) * k
-	look += (Vector3(lx, ly, lz) - look) * k
+			var e := smoothstep(0.0, 0.45, m.t)                  # ease over from the bowler's shot as the ball leaves the hand
+			px = lerpf(m.x0 * 0.5 + 0.85, px, e); py = lerpf(2.4, py, e); pz = lerpf(3.9, pz, e)
+			lx = lerpf(m.x0 * 0.25 + 0.1, lx, e); ly = lerpf(0.3, ly, e); lz = lerpf(-9.0, lz, e)
+	# Cuts: into and out of the replay, round to the bowler's reaction, and to any shot more than 6 m away. Elsewhere the camera and the point it looks at
+	# each ride a critically damped spring to their targets, so moves start and stop smoothly, with no lurch when a
+	# shot changes (a plain ease starts at full speed the instant the target moves).
+	var react: bool = st == "show" and m.t > m.react_from
+	var want_p := Vector3(px, py, pz)
+	var want_l := Vector3(lx, ly, lz)
+	var cut := (st == "replay") != (_cam_state == "replay") or (react and not _cam_react) or pos.distance_to(want_p) > 6.0   # (back up the lane: cut, don't fly)
+	_cam_state = st
+	_cam_react = react
+	if cut:
+		pos = want_p; look = want_l; _cam_v = Vector3.ZERO; _look_v = Vector3.ZERO
+	else:
+		var w := rate * 1.7
+		var ex := exp(-w * dt)
+		var x := pos - want_p
+		var c := _cam_v + x * w
+		pos = want_p + (x + c * dt) * ex
+		_cam_v = (_cam_v - c * (w * dt)) * ex
+		x = look - want_l
+		c = _look_v + x * w
+		look = want_l + (x + c * dt) * ex
+		_look_v = (_look_v - c * (w * dt)) * ex
 	var shake := Vector3.ZERO
-	if m.shake > 0 and not Store.reduced():
+	_shake_t += dt
+	if m.shake > 0 and not Store.reduced():                 # a rumble: smooth noise, the same at any frame rate
 		var a := m.shake * m.shake * 0.025
-		shake = Vector3(randf_range(-a, a), randf_range(-a, a), 0)
+		var t := _shake_t
+		shake = a * Vector3(sin(t * 37.1) + 0.6 * sin(t * 61.7 + 1.3), sin(t * 43.3 + 2.1) + 0.6 * sin(t * 71.9 + 0.4), 0) / 1.6
 	cam.position = pos + shake
 	cam.look_at(look + shake)
 	# depth of field on the close cameras (High and Ultra): the pins sharp, the pit and the near lane soft
