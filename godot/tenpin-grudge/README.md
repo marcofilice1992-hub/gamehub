@@ -34,6 +34,21 @@ or run `godot --path godot/tenpin-grudge`.
 | A | Space | Enter | Skip a result or replay |
 | Start | Esc | P | Pause |
 
+## Graphics
+
+Pause menu → Graphics: **Auto** (default), Low, Medium, High, Ultra. Changes apply at once. F3 shows frame rate, frame time,
+the tier and draw calls.
+
+| Tier | Resolution and AA | Effects |
+|---|---|---|
+| Low | FSR 1 at 67%, FXAA | Glow only; hard shadows; neighbours stand still |
+| Medium | FSR 2 at 77% (temporal AA) | + reflections on the oil (SSR), ambient occlusion, soft shadows |
+| High | FSR 2 at 100% as AA | + bounce light (SSIL), haze with light beams, depth of field on the close cameras |
+| Ultra | FSR 2 at 100% | + SDFGI global illumination, finer haze, better AO and shadows |
+
+Auto starts at High and steps down a tier if the game runs under 50 fps for three seconds. It never steps back up by itself.
+An RTX 3060 Ti should hold High at 1080p; try Ultra, and use F3 to check.
+
 ## How it is put together
 
 | File | What it does |
@@ -42,7 +57,9 @@ or run `godot --path godot/tenpin-grudge`.
 | `scripts/score.gd` | Ten-pin scoring: frames, bonuses, the tenth frame, best and worst case, splits |
 | `scripts/lane.gd` | Jolt physics for lane 14: pins, ball, hook and lane friction, the settle and count |
 | `scripts/match.gd` | The match: turns, swing, release, count, card, roll-offs, heckles, coaching, the practice bot |
-| `scripts/hall.gd` | The 3D hall, pins and ball drawn from the physics, lane screens, neighbours, cameras |
+| `scripts/hall.gd` | The 3D hall, pins and ball drawn from the physics, lane screens, neighbours, cameras, graphics tiers |
+| `scripts/fx.gd` | GPU particles: impact dust and chips, strike confetti |
+| `shaders/` | Lane boards and oil, pins, ball, kickback art |
 | `scripts/hud.gd`, `scripts/gx.gd` | Scorecard, panels, meters and callouts, drawn on a 1920×1080 frame |
 | `scripts/pads.gd` | Two seats: controllers, two keyboard halves, the bot; rumble |
 | `scripts/store.gd` | Settings and the head-to-head record, saved to the user folder |
@@ -50,6 +67,7 @@ or run `godot --path godot/tenpin-grudge`.
 | `main.gd` | Seats, pause menu, results |
 
 Physics runs at 240 ticks a second. Hook and friction are applied every tick, so a shot plays the same at any frame rate.
+Pins and ball are drawn blended between the last two ticks, so they move evenly on a 60, 144 or 165 Hz screen.
 Every rack gets a fresh physics world, so the same shot on the same rack always counts the same pins.
 
 ## Checks

@@ -4,7 +4,10 @@ extends Control
 ## A port of the browser version's draw() and card(). Laid out on a 1920×1080 frame; the window scales it.
 
 var m: Match
-var parts: Array = []              # 2D confetti: [pos, vel, life, max, size, colour]
+var parts: Array = []
+var hall: Hall
+var perf := false                 # F3: frame rate, frame time, tier and draw calls
+var _f3 := false              # 2D confetti: [pos, vel, life, max, size, colour]
 var _vig: TextureRect
 
 const W := 1920.0
@@ -51,6 +54,9 @@ func burst(at: Vector2, count: int, col: Color, lo: float, hi: float, life: floa
 	if parts.size() > 300: parts = parts.slice(parts.size() - 300)
 
 func _process(dt: float) -> void:
+	var f3 := Input.is_physical_key_pressed(KEY_F3)
+	if f3 and not _f3: perf = not perf
+	_f3 = f3
 	for p in parts:
 		p[1] *= pow(0.12, dt)
 		p[1].y += 900 * dt
@@ -66,6 +72,7 @@ func _draw() -> void:
 		c.a = clampf(p[2] / p[3] * 1.5, 0, 1)
 		draw_rect(Rect2(p[0] - Vector2(p[4], p[4]) / 2, Vector2(p[4], p[4])), c)
 	card()
+	if perf: _perf()
 	var p: Dictionary = m.cur
 	var s = p.seat
 	var col: Color = Tune.PCOL[p.c]
@@ -192,6 +199,16 @@ func _draw() -> void:
 		var w := m.won
 		Gx.panel(self, W / 2 - 380, 430, 760, 150)
 		Gx.text(self, "A draw" if w < 0 else Tune.NAMES[m.P[w].c] + " wins", W / 2, 530, { "size": Gx.FS.xl, "weight": 700, "align": "center", "color": Tune.TEXT if w < 0 else Tune.PCOL[m.P[w].c] })
+
+func _perf() -> void:
+	var x := W - 420.0
+	var y := 200.0
+	Gx.panel(self, x, y, 360, 150)
+	var fps := Engine.get_frames_per_second()
+	Gx.text(self, "%d fps · %.1f ms" % [fps, 1000.0 / maxf(1.0, fps)], x + 20, y + 40, { "size": Gx.FS.sm, "weight": 700, "mono": true })
+	Gx.text(self, "Graphics: " + (hall.tier_label() if hall else "?"), x + 20, y + 80, { "size": Gx.FS.xs, "color": Tune.MUTED })
+	Gx.text(self, "%d draw calls · %.1fM triangles" % [Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1e6], x + 20, y + 116, { "size": Gx.FS.xs, "color": Tune.MUTED })
 
 func _fade(c: Color, a: float) -> Color:
 	return Color(c.r, c.g, c.b, c.a * a)

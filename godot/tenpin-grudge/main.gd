@@ -16,7 +16,8 @@ var result := {}
 var _repeat := {}            # stick-as-D-pad repeat timers, per seat
 var _match_seed := 0
 
-const MENU := ["Resume", "Restart match", "Volume", "Rumble", "Reduced motion", "Fullscreen", "Quit to seats"]
+const MENU := ["Resume", "Restart match", "Volume", "Graphics", "Rumble", "Reduced motion", "Fullscreen", "Quit to seats"]
+const GRAPHICS := ["auto", "low", "medium", "high", "ultra"]
 const ASSISTS := ["Off", "Guide line, steadier release", "Full path, bumpers, steadiest release"]
 
 func _ready() -> void:
@@ -34,6 +35,8 @@ func _ready() -> void:
 		if a == "--demo": _demo = true
 		elif a.begins_with("--shots="): _shots = a.substr(8)
 		elif a.begins_with("--seed="): _match_seed = int(a.substr(7))
+		elif a.begins_with("--only="): _only = a.substr(7)          # e.g. --only=05,06,08
+		elif a.begins_with("--graphics="): Store.data.settings.graphics = a.substr(11)
 	if _demo or _shots != "": Store.memory = true              # demo runs never touch the real record
 
 var _demo := false
@@ -41,22 +44,34 @@ var _shots := ""
 var _taken := {}
 var _frames := 0
 var _saved := 0
+var _only := ""
+var _t0 := 0
 
 func _capture(name: String) -> void:
 	if _shots == "" or _taken.has(name): return
+	if _only != "" and not _only.contains(name.substr(0, 2)): return
 	_taken[name] = true
 	RenderingServer.render_loop_enabled = true               # draw only around a capture: software rendering is slow
-	for i in 4: await get_tree().process_frame
+	get_viewport().disable_3d = false
+	for i in 8: await get_tree().process_frame               # let temporal AA settle
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
 	if img: img.save_png("%s/%s.png" % [_shots, name])
-	print("shot ", name, " at frame ", _frames)
+	print("perf %s: objects %d, draw calls %d, primitives %d, video memory %.0f MB" % [name,
+		Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0])
+	print("shot ", name, " at frame ", _frames, " (", (Time.get_ticks_msec() - _t0) / 1000, " s)")
 	_saved += 1
 	RenderingServer.render_loop_enabled = false
+	get_viewport().disable_3d = true
 
 func _shots_step() -> void:
 	_frames += 1
-	if _frames == 1: RenderingServer.render_loop_enabled = false
+	if _frames == 1:
+		RenderingServer.render_loop_enabled = false
+		get_viewport().disable_3d = true
+		_t0 = Time.get_ticks_msec()
+	if _frames % 100 == 0: print("frame ", _frames, " at ", (Time.get_ticks_msec() - _t0) / 1000.0, " s")
 	if screen == Screen.JOIN:
 		if _frames == 20: _capture("01-seats")
 		if _frames == 40:
@@ -77,6 +92,9 @@ func _shots_step() -> void:
 	if key == "roll" and m.lane.hit and m.lane.t - m.lane.hit_t > 0.25: _capture("06-impact")
 	if key == "show" and m.t > 0.4: _capture("07-show")
 	if key == "replay" and m.t > 1.2: _capture("08-replay")
+	if _only != "":
+		if _saved >= _only.split(",").size() or m.n > 8: get_tree().quit()
+		return
 	if _saved == 8 and not paused:
 		paused = true
 		get_tree().paused = true
@@ -156,6 +174,7 @@ func start_match() -> void:
 	hud.process_mode = Node.PROCESS_MODE_PAUSABLE
 	layer.add_child(hud)
 	hud.attach(match_node)
+	hud.hall = hall
 	screen = Screen.PLAY
 	paused = false
 	get_tree().paused = false
@@ -230,6 +249,10 @@ func _play(_dt: float) -> void:
 		if item == "Volume" and side:
 			Store.set_setting("volume", clampi(int(Store.get_setting("volume", 7)) + side, 0, 10))
 			Sfx.play("tick")
+		if item == "Graphics" and (side or s.pressed("a")):
+			_graphics(side if side else 1)
+			Sfx.play("tick")
+			if s.pressed("a"): return
 		if s.pressed("start") or s.pressed("b"):
 			_resume()
 			return
@@ -251,6 +274,14 @@ func _play(_dt: float) -> void:
 				"Volume": pass
 			Sfx.play("select")
 			return
+
+## Graphics: Auto, Low, Medium, High, Ultra. Applies at once, so the change can be judged behind the menu.
+func _graphics(step: int) -> void:
+	var i := (GRAPHICS.find(Store.get_setting("graphics", "auto")) + step + GRAPHICS.size()) % GRAPHICS.size()
+	Store.set_setting("graphics", GRAPHICS[i])
+	if hall:
+		hall.auto = i == 0
+		hall.apply_tier(2 if i == 0 else i - 1)
 
 func _resume() -> void:
 	for s in Pads.seats:                                      # a controller that came back is in play again
@@ -327,7 +358,7 @@ class Front extends Control:
 	func _pause() -> void:
 		draw_rect(Rect2(0, 0, 1920, 1080), Color(0.02, 0.025, 0.035, 0.72))
 		var x := 660.0
-		Gx.panel(self, x - 40, 240, 680, 640, 18)
+		Gx.panel(self, x - 40, 240, 680, 700, 18)
 		Gx.marker(self, main.paused_by, x + 14, 290, 11)
 		Gx.eyebrow(self, "Paused by player %d" % (main.paused_by + 1), x + 40, 298)
 		for i in main.MENU.size():
@@ -339,12 +370,13 @@ class Front extends Control:
 			var val := ""
 			match item:
 				"Volume": val = "%d / 10" % int(Store.get_setting("volume", 7))
+				"Graphics": val = main.hall.tier_label() if main.hall else String(Store.get_setting("graphics", "auto")).capitalize()
 				"Rumble": val = "On" if Store.get_setting("rumble", true) else "Off"
 				"Reduced motion": val = "On" if Store.reduced() else "Off"
 				"Fullscreen": val = "On" if Store.get_setting("fullscreen", true) else "Off"
 			if val != "": Gx.text(self, val, x + 600, y, { "size": Gx.FS.sm, "mono": true, "align": "right", "color": Tune.TEXT if on else Tune.MUTED })
 		var s = Pads.seats[main.paused_by]
-		Gx.hints(self, x, 840, [["a", "Choose"], ["lb", ""], ["rb", "Volume"], ["start", "Resume"]], s.type)
+		Gx.hints(self, x, 900, [["a", "Choose"], ["lb", ""], ["rb", "Change"], ["start", "Resume"]], s.type)
 
 	func _results() -> void:
 		draw_rect(Rect2(0, 0, 1920, 1080), Color(0.02, 0.025, 0.035, 0.86))

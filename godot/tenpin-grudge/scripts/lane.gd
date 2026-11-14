@@ -221,10 +221,29 @@ func settled() -> bool:
 var pace := 1.0
 var _acc := 0.0
 
+## Where to draw a body this frame. Physics ticks 240 times a second and the screen refreshes at its own rate (60, 144, 165...),
+## so drawing bodies where the last tick left them would move them in uneven steps. Each tick keeps where every body was
+## before the step; drawing blends from there to where it is now by how far the frame is into the next tick.
+var _snap := {}                  # instance id -> Transform3D before the latest step
+
+func draw_xform(b: Node3D) -> Transform3D:
+	var now := b.global_transform
+	var was = _snap.get(b.get_instance_id())
+	if was == null: return now
+	var f := Engine.get_physics_interpolation_fraction()
+	return Transform3D(Basis((was as Transform3D).basis.get_rotation_quaternion().slerp(now.basis.get_rotation_quaternion(), f)), (was as Transform3D).origin.lerp(now.origin, f))
+
+func _keep_snapshots() -> void:
+	_snap.clear()
+	for b in pins:
+		if b and is_instance_valid(b): _snap[b.get_instance_id()] = b.global_transform
+	if ball and is_instance_valid(ball): _snap[ball.get_instance_id()] = ball.global_transform
+
 func _physics_process(dt: float) -> void:
 	_acc += pace
 	var go := _acc >= 1.0
 	PhysicsServer3D.space_set_active(_vp.world_3d.space, go)
+	_keep_snapshots()                # on a held tick nothing moves, so the snapshot equals the body and the picture holds still
 	if not go: return
 	_acc -= 1.0
 	t += dt

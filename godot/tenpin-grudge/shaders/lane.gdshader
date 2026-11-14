@@ -51,6 +51,10 @@ void fragment() {
 	}
 	col *= 1.0 + g;
 	col *= 1.0 - 0.3 * smoothstep(0.06, 0.0, bf);                     // the seam between boards
+	// the track: years of balls have worn a path from the right of the heads to the pocket; it reads darker and less glossy
+	float tx = 0.2 - clamp(d - 9.0, 0.0, 9.0) * 0.014;
+	float track = smoothstep(0.08, 0.02, abs(x - tx)) * smoothstep(3.0, 7.0, d) * (1.0 - smoothstep(head - 0.6, head - 0.2, d));
+	col *= 1.0 - 0.07 * track;
 	if (d < 0.0) col *= 0.82;                                         // the approach is a shade darker
 	float inl = 0.0;
 	inl = max(inl, step(abs(d), 0.006));                              // foul line
@@ -77,9 +81,16 @@ void fragment() {
 	} }
 	// oil: glossy for its length, fading over 1.5 m, then dry boards
 	float o = d < 0.0 ? 0.0 : d < oil ? 1.0 : d < oil + 1.5 ? 1.0 - (d - oil) / 1.5 : 0.0;
+	// buffing leaves fine streaks in the oil, running down the lane
+	float streak = n1(x * 900.0 + seed) * 0.6 + n1(x * 260.0 - seed) * 0.4;
 	ALBEDO = col * dim;
-	ROUGHNESS = d < 0.0 ? 0.5 : 0.5 - 0.34 * o + (d > head - 0.5 ? 0.06 : 0.0);
+	ROUGHNESS = (d < 0.0 ? 0.5 : 0.5 - 0.34 * o + (d > head - 0.5 ? 0.06 : 0.0)) + o * (streak - 0.5) * 0.08 + track * 0.08;
 	SPECULAR = 0.5 + 0.1 * o;
 	METALLIC = 0.0;
+	// relief: the seams are grooves and the grain has a little lift; tangent x runs across the lane
+	float grain_bump = (n1(d * 0.9 + bi * 5.0) - 0.5) * 0.15;
+	float slope = (smoothstep(0.06, 0.0, bf) - smoothstep(0.94, 1.0, bf)) * 0.9 + g * 0.6 + grain_bump * 0.2;
+	NORMAL_MAP = vec3(0.5 + slope * 0.25, 0.5, 1.0);
+	NORMAL_MAP_DEPTH = 1.0;
 }
 
