@@ -85,6 +85,7 @@ func _shots_step() -> void:
 	var m := match_node
 	if m == null: return
 	var key := m.state
+	if key == "intro" and m.t > 0.02: _capture("00-flyover")
 	if key == "intro" and m.t > 0.6: _capture("02-intro")
 	if key == "stance" and m.t > 1.2: _capture("03-stance")
 	if key == "swing" and m.sw.t > 0.3: _capture("04-swing")

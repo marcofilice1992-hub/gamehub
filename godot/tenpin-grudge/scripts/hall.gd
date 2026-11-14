@@ -28,6 +28,7 @@ var leds: Array = []
 var deck_light: SpotLight3D
 var screen_glow: OmniLight3D
 var cans: Array = []
+var decor: Decor
 var boards := {}                      # lane offset -> { vp, draw, key }
 var racks: MultiMeshInstance3D
 var nb: Array = []                    # the neighbours' lanes
@@ -105,8 +106,8 @@ func build(match_node: Match) -> void:
 	m = match_node
 	R.seed = 97
 	var D := Tune.DECK
-	var len := D + 1.5
-	var mid := (D - 1.5) / 2
+	var len := D + 0.3                    # lanes, gutters and capping start at the foul line; the approach is Decor's
+	var mid := (D - 0.3) / 2
 	var far := Tune.LW + Tune.GW
 	var HALL := (NL + 0.5) * PITCH
 	var MAG := Tune.MAG
@@ -183,7 +184,7 @@ func build(match_node: Match) -> void:
 	add_child(sun)
 	deck_light = SpotLight3D.new()
 	deck_light.light_color = Color("#FFFAF4")
-	deck_light.light_energy = 1.1
+	deck_light.light_energy = 0.9
 	deck_light.spot_range = 6.0
 	deck_light.spot_angle = 46.0
 	deck_light.shadow_enabled = true
@@ -275,21 +276,16 @@ func build(match_node: Match) -> void:
 	var pil_mesh := _box(0.2, 4.6, 0.5)
 	var pil_mat := _mat("#15132A", 0.6)
 	for s in [-1, 1]:
-		var wall := QuadMesh.new()
-		wall.size = Vector2(D + 14, 4.6)
-		var w := _add(wall, _mat("#0D0C17", 0.8), s * HALL, 2.2, (D - 14) / 2 + 0.3)
-		w.rotation.y = -s * PI / 2
 		for k in 2:
 			_s(tube_mesh, tube_mats[k], s * (HALL - 0.24), [0.95, 2.7][k], (D - 14) / 2 + 0.3)
 		var dd := -6.0
 		while dd < D:
 			_s(pil_mesh, pil_mat, s * (HALL - 0.1), 2.2, dd)
 			dd += 4.0
-	_add(_box(HALL * 2, 0.1, 12), _mat("#221A24", 0.8), 0, -0.05, -7.5)
 	_add(_box(HALL * 2, 0.02, 1.4), _mat("#050608", 0.9), 0, -0.34, D + 0.7)
-	var curtain := QuadMesh.new()
-	curtain.size = Vector2(HALL * 2, 1.8)
-	_add(curtain, _mat("#16161B", 1.0), 0, 0.4, Tune.PIT + 0.08)
+	decor = Decor.new()
+	add_child(decor)
+	decor.build(lane_shader)
 	# ---- masking units: the fascia, one screen per lane, the neon sign ----
 	var lanes := 2 * NL + 1
 	_add(_box(PITCH * lanes, 0.98, 0.12), _mat("#08070F", 0.7), 0, 1.13, D + 0.2)
@@ -400,6 +396,9 @@ func build(match_node: Match) -> void:
 	guide.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(guide)
 
+	if not Store.reduced():                                 # start the opening shot from the concourse
+		pos = Vector3(0, 2.4, 11.0)
+		look = Vector3(0, 0.6, -6.0)
 	cam = Camera3D.new()
 	cam.fov = 27.0
 	cam.near = 0.05
@@ -626,7 +625,7 @@ func _process(dt: float) -> void:
 	var col: Color = Tune.PCOL[c]
 	var fl := m.flash
 	# strikes and spares: the deck light, the lane-side lights and the screen all lift together, then settle
-	deck_light.light_energy = 1.1 * (1 + 0.6 * fl)
+	deck_light.light_energy = 0.9 * (1 + 0.6 * fl)
 	strip_mat.albedo_color = Color(col.r * (1.2 + 2.5 * fl), col.g * (1.2 + 2.5 * fl), col.b * (1.2 + 2.5 * fl))
 	screen_glow.light_color = col
 	screen_glow.light_energy = 1.0 + 3.0 * fl
@@ -720,7 +719,12 @@ func _camera(dt: float) -> void:
 	var lz := -6.0
 	var rate := 3.0
 	var ln := m.lane
-	if st == "replay":                                       # low inside the lane, pushing in slowly
+	if st == "intro" and not Store.reduced():               # the opening shot: from the concourse, over the ball returns, down to the stance
+		var e := clampf(m.t / 2.0, 0.0, 1.0)
+		e = e * e * (3 - 2 * e)
+		px = 0.0; py = lerpf(2.4, 1.7, e); pz = lerpf(11.0, 4.6, e)
+		lx = 0.0; ly = lerpf(0.6, 0.1, e); lz = -6.0; rate = 30
+	elif st == "replay":                                       # low inside the lane, pushing in slowly
 		var t := minf(m.t, 6.0)
 		px = 0.5 - t * 0.06; py = 0.3 + t * 0.012; pz = -(Tune.HEAD - 2.8 + t * 0.2)
 		lx = 0; ly = 0.17; lz = -(Tune.HEAD + 0.3); rate = 9
@@ -790,6 +794,7 @@ func apply_tier(t: int) -> void:
 	deck_light.shadow_enabled = tier >= 1
 	racks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if tier >= 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	fx.scale_k = [0.4, 0.7, 1.0, 1.0][tier]
+	decor.set_tier(tier)
 	slow_t = 0.0
 
 func _on_fx(kind: String, c: int) -> void:

@@ -59,6 +59,7 @@ An RTX 3060 Ti should hold High at 1080p; try Ultra, and use F3 to check.
 | `scripts/match.gd` | The match: turns, swing, release, count, card, roll-offs, heckles, coaching, the practice bot |
 | `scripts/hall.gd` | The 3D hall, pins and ball drawn from the physics, lane screens, neighbours, cameras, graphics tiers |
 | `scripts/fx.gd` | GPU particles: impact dust and chips, strike confetti |
+| `scripts/decor.gd` | The hall around the lanes: approach, carpeted concourse and seating, ball returns, wall panels and posters, pit curtain, dust |
 | `shaders/` | Lane boards and oil, pins, ball, kickback art |
 | `scripts/hud.gd`, `scripts/gx.gd` | Scorecard, panels, meters and callouts, drawn on a 1920×1080 frame |
 | `scripts/pads.gd` | Two seats: controllers, two keyboard halves, the bot; rumble |

@@ -7,6 +7,7 @@ uniform float head = 18.29;
 uniform float oil = 12.0;
 uniform float dim = 1.0;          // neighbouring lanes are a shade darker
 uniform float seed = 7.0;
+uniform float repeat = 0.0;      // the approach is one wide floor: its marks repeat every lane pitch
 
 varying vec2 xd;                  // x across the lane, d down it
 
@@ -31,6 +32,7 @@ float tri(vec2 p, vec2 a, float len, float half_w) {   // an arrow pointing down
 
 void fragment() {
 	float x = xd.x;
+	float xm = repeat > 0.0 ? mod(x + repeat * 0.5, repeat) - repeat * 0.5 : x;
 	float d = xd.y;
 	float u = x / lw * 0.5 + 0.5;
 	float bi = floor(u * 39.0);
@@ -61,22 +63,22 @@ void fragment() {
 	for (int i = -3; i <= 3; i++) {
 		float fi = float(i);
 		float ax = fi * 5.0 * lw / 19.5;
-		inl = max(inl, tri(vec2(x, d), vec2(ax, 4.57 + (3.0 - abs(fi)) * 0.3 - 0.06), 0.2, 0.013));
-		for (int j = 0; j < 3; j++) {
-			float dd = j == 0 ? 2.13 : j == 1 ? -0.35 : -1.2;
-			inl = max(inl, step(length(vec2(x - ax, d - dd)), 0.0068));
+		inl = max(inl, tri(vec2(xm, d), vec2(ax, 4.57 + (3.0 - abs(fi)) * 0.3 - 0.06), 0.2, 0.013));
+		for (int j = 0; j < 5; j++) {
+			float dd = j == 0 ? 2.13 : j == 1 ? -0.35 : j == 2 ? -1.2 : j == 3 ? -3.66 : -4.57;
+			inl = max(inl, step(length(vec2(xm - ax, d - dd)), 0.0068));
 		}
 	}
 	for (int s = -1; s <= 1; s += 2) {
 		float ax = float(s) * 10.0 * lw / 19.5;
-		inl = max(inl, step(abs(x - ax), 0.004) * step(10.4, d) * step(d, 12.2));
+		inl = max(inl, step(abs(xm - ax), 0.004) * step(10.4, d) * step(d, 12.2));
 	}
 	vec3 ink = srgb_to_linear_approx(vec3(0.227, 0.141, 0.078));
 	col = mix(col, ink, inl);
 	// pin spots
 	for (int r = 0; r < 4; r++) { for (int i = 0; i <= r; i++) {
 		vec2 sp = vec2((float(i) - float(r) / 2.0) * 0.3048, head + float(r) * 0.26396);
-		vec2 q = (vec2(x, d) - sp) / vec2(0.0135, 0.0135);
+		vec2 q = (vec2(xm, d) - sp) / vec2(0.0135, 0.0135);
 		col = mix(col, ink, 0.55 * step(length(q), 1.0));
 	} }
 	// oil: glossy for its length, fading over 1.5 m, then dry boards
