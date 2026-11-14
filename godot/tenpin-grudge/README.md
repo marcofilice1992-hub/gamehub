@@ -61,6 +61,7 @@ An RTX 3060 Ti should hold High at 1080p; try Ultra, and use F3 to check.
 | `scripts/hall.gd` | The 3D hall, pins and ball drawn from the physics, lane screens, neighbours, cameras, graphics tiers |
 | `scripts/fx.gd` | GPU particles: impact dust and chips, strike confetti |
 | `scripts/bowler.gd` | The bowlers: rigged characters dressed for the alley; clips underneath, the bowling posed over them |
+| `scripts/outfit.gd` | The bowlers' loose shirts and trousers, built from the body mesh |
 | `scripts/decor.gd` | The hall around the lanes: approach, carpeted concourse and seating, ball returns, wall panels and posters, pit curtain, dust |
 | `shaders/` | Lane boards and oil, pins, ball, kickback art, the bowlers' clothes and hair |
 | `characters/` | The bowlers' bodies, hair and animation clips (Quaternius, CC0: see below) |
@@ -91,8 +92,12 @@ bot-against-bot matches.
 The bodies and hair are Quaternius's **Universal Base Characters** (male and female, CC0), and the clips are from his
 **Universal Animation Library** 1 and 2 (CC0): <https://quaternius.com>. `characters/LICENSE-Quaternius.txt` has the licence.
 
-- Clothes are painted on by the shader (`shaders/body.gdshader`) from where each vertex sits in the T-pose, so they follow
-  the skinning: a bowling shirt in the player's colour with panels, piping, collar and buttons; trousers; two-tone shoes.
+- Clothes are real, loose meshes (`scripts/outfit.gd`), built from each body when the game starts: a boxy, untucked
+  bowling shirt that hangs straight down from the chest, with short flared sleeves, panels, piping, collar, buttons and
+  cuffs; and straight-leg trousers, loose from the knee down, with a crease and a break over the shoes. They keep the
+  body's skin weights so they move with it, except that the shirt hangs from the hips rather than the thighs and the
+  trouser cuffs follow the shins rather than the feet. Folds are bumped in by `shaders/cloth.gdshader`. Under the clothes
+  the skin is pulled in 3 cm so it can't poke through. Shoes are still painted on.
 - Clips play for the idles and reactions: waiting, folded arms when the other player strikes, a nod and thumbs up for a
   spare, hands round the mouth for a heckle, a dance for the match winner and a head shake for the loser. The neighbours
   wait on their phones, with a drink, or chatting.

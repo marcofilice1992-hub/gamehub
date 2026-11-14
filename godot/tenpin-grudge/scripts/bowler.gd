@@ -84,7 +84,8 @@ func build(lk: Dictionary, cast_shadows := true) -> void:
 	var main: MeshInstance3D = null
 	for m in sk.find_children("*", "MeshInstance3D", false, false):
 		if main == null or m.mesh.surface_get_array_len(0) > main.mesh.surface_get_array_len(0): main = m
-	main.mesh = _dressable(BODIES[kind], main.mesh)
+	var src_mesh: Mesh = main.mesh
+	main.mesh = _dressable(BODIES[kind], src_mesh)
 	mat = ShaderMaterial.new()
 	mat.shader = load("res://shaders/body.gdshader")
 	var tex := "res://characters/T_Superhero_%s_" % ("Male" if kind == "m" else "Female")
@@ -97,6 +98,25 @@ func build(lk: Dictionary, cast_shadows := true) -> void:
 	mat.set_shader_parameter("trousers", Color(lk.trousers))
 	mat.set_shader_parameter("shoes", Color(lk.shoes))
 	main.material_override = mat
+	# the clothes: a loose shirt and trousers, built from this body and skinned to the same skeleton
+	var fit: Dictionary = Outfit.make(BODIES[kind], src_mesh, main.skin, sk)
+	var z: Dictionary = Outfit.zones(sk)
+	for g in ["shirt", "trousers"]:
+		var cm := ShaderMaterial.new()
+		cm.shader = load("res://shaders/cloth.gdshader")
+		cm.set_shader_parameter("shirt", 1.0 if g == "shirt" else 0.0)
+		cm.set_shader_parameter("base", Color(lk.shirt if g == "shirt" else lk.trousers))
+		cm.set_shader_parameter("panel", Color(lk.panel))
+		for u in [["collar_y", "collar"], ["chest_y", "chest"], ["hem_y", "hem"], ["sleeve_x", "sleeve"], ["shoulder_x", "shoulder"],
+				["armpit_y", "armpit"], ["knee_y", "knee"], ["cuff_y", "cuff"]]:
+			cm.set_shader_parameter(u[0], z[u[1]])
+		var gi := MeshInstance3D.new()
+		gi.name = g.capitalize()
+		gi.mesh = fit[g]
+		gi.skin = main.skin
+		gi.material_override = cm
+		sk.add_child(gi)
+		gi.skeleton = NodePath("..")
 	var hair_mat := ShaderMaterial.new()
 	hair_mat.shader = load("res://shaders/hair.gdshader")
 	hair_mat.set_shader_parameter("tint", Color(lk.hair_col))
@@ -116,17 +136,15 @@ func build(lk: Dictionary, cast_shadows := true) -> void:
 		h.free()
 	for m in sk.find_children("*", "MeshInstance3D", false, false):
 		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if cast_shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# where the clothes go on this body
-	var rest := func(b: String) -> Vector3: return sk.get_bone_global_rest(sk.find_bone(b)).origin
-	var pel: Vector3 = rest.call("pelvis")
-	var ua: Vector3 = rest.call("upperarm_r")
-	var la: Vector3 = rest.call("lowerarm_r")
-	mat.set_shader_parameter("collar_y", rest.call("neck_01").y + 0.005)
-	mat.set_shader_parameter("hem_y", pel.y + 0.11)
-	mat.set_shader_parameter("waist_y", pel.y + 0.16)
-	mat.set_shader_parameter("shoulder_x", absf(ua.x) - 0.02)
-	mat.set_shader_parameter("sleeve_x", absf(ua.x) + 0.42 * absf(la.x - ua.x))
-	mat.set_shader_parameter("ankle_y", rest.call("foot_r").y + 0.045)
+	# where the clothes sit on this body (the skin under them is hidden, the edges painted to match)
+	mat.set_shader_parameter("collar_y", z.collar)
+	mat.set_shader_parameter("hem_y", z.hem)
+	mat.set_shader_parameter("waist_y", z.top)
+	mat.set_shader_parameter("shoulder_x", z.shoulder)
+	mat.set_shader_parameter("armpit_y", z.armpit)
+	mat.set_shader_parameter("sleeve_x", z.sleeve)
+	mat.set_shader_parameter("ankle_y", z.shoe)
+	mat.set_shader_parameter("cuff_y", z.cuff)
 	# the retarget: rest frames, parents, and the fix that hangs the T-pose arms down
 	for r in RIG:
 		var i := sk.find_bone(r[0])

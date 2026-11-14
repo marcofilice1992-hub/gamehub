@@ -1,7 +1,8 @@
 shader_type spatial;
-// A Quaternius base character dressed for the alley. The body is the textured skin; the clothes are painted on by where
-// each vertex sits in the T-pose (UV2 = x, y and COLOR.r = z * 2 + 0.5, set when the mesh is loaded), so they follow the skinning exactly:
-// a retro bowling shirt with short sleeves, two panels, piping, a collar and buttons; trousers; two-tone bowling shoes.
+// A Quaternius base character: the textured skin, and two-tone bowling shoes painted on. The shirt and trousers are
+// separate loose meshes (scripts/outfit.gd, shaders/cloth.gdshader); under them the skin is pulled in, and the edges
+// just inside each opening are painted as the cloth. Painting goes by where each vertex sits in the T-pose
+// (UV2 = x, y and COLOR.r = z * 2 + 0.5, set when the mesh is loaded), so it follows the skinning exactly.
 // The character faces +Z in this space, +Y is up, and its right side is -X.
 uniform sampler2D skin_tex : source_color, filter_linear_mipmap_anisotropic;
 uniform sampler2D skin_nrm : hint_normal, filter_linear_mipmap_anisotropic;
@@ -19,12 +20,20 @@ uniform float waist_y = 1.0;
 uniform float sleeve_x = 0.36;
 uniform float shoulder_x = 0.2;
 uniform float ankle_y = 0.13;
+uniform float armpit_y = 1.37;
+uniform float cuff_y = 0.14;
 uniform float chest_z = 0.1;
 
 varying vec3 rp;
 
 void vertex() {
 	rp = vec3(UV2.x, UV2.y, (COLOR.r - 0.5) * 0.5);
+	// under the clothes (outfit.gd's shirt and trousers) the skin is drawn in 3 cm, so nothing pokes through the cloth
+	// as the body bends. The few centimetres inside each opening stay put, painted as the cloth's inside.
+	float ax = abs(rp.x);
+	float arm = smoothstep(shoulder_x - 0.01, shoulder_x + 0.01, ax) * smoothstep(armpit_y - 0.01, armpit_y + 0.01, rp.y);
+	float under = smoothstep(cuff_y + 0.05, cuff_y + 0.09, rp.y) * (1.0 - smoothstep(collar_y - 0.06, collar_y - 0.035, rp.y)) * (1.0 - arm);
+	VERTEX -= NORMAL * 0.03 * under;
 }
 
 float band(float x, float a, float w) { return smoothstep(a - w, a + w, x); }
@@ -37,7 +46,7 @@ void fragment() {
 	float ax = abs(rp.x);
 	float y = rp.y;
 	// the shirt: the torso between the hem and the collar, and the upper arm out to the sleeve
-	float arm = band(ax, shoulder_x, 0.01) * band(y, waist_y + 0.2, 0.01);    // (the arms are out along x in the T-pose)
+	float arm = band(ax, shoulder_x, 0.01) * band(y, armpit_y, 0.01);       // (the arms are out along x in the T-pose)
 	float shirt = (1.0 - band(y, collar_y, 0.006)) * band(y, hem_y, 0.004);
 	shirt *= mix(1.0, 1.0 - band(ax, sleeve_x, 0.004), arm);
 	// trousers: waist to ankle, on the legs
@@ -73,6 +82,4 @@ void fragment() {
 	ALBEDO = col;
 	ROUGHNESS = mix(rough, mix(0.72, 0.4, shoe), cloth);
 	NORMAL_MAP = mix(nrm, vec3(0.5, 0.5, 1.0), cloth * 0.85);
-	// a touch of skin translucency
-	SSS_STRENGTH = 0.25 * (1.0 - cloth);
 }
