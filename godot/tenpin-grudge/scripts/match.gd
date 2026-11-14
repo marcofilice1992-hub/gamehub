@@ -307,6 +307,7 @@ func release(drift: float) -> void:
 func score(count: int) -> void:
 	var p := cur
 	var left := lane.up.size()
+	if quick: print("ball %d: %d down" % [n, count])
 	var text := ""
 	var sub := ""
 	var big := false
@@ -439,8 +440,8 @@ func bot(seat) -> void:
 				var bx: float = xt - pts[pts.size() - 1].x
 				if absf(bx) <= 0.42 and (best.is_empty() or absf(bx - pref) < absf(best.x0 - pref)): best = { "a": a, "x0": bx }
 			if best.is_empty(): best = { "a": 0, "x0": clampf(xt, -0.42, 0.42) }
-			p.plan = { "x0": clampf(best.x0 + rng.randfn(0, 1) * 0.018, -0.45, 0.45), "aim": best.a, "hold": hold_s, "hk": hk,
-				"drift": clampf(rng.randfn(0, 1) * 0.2, -1, 1), "wait": rng.randf_range(2.5, 4.0) if not (sim or quick) else 0.6, "flip": 0 }
+			p.plan = { "x0": clampf(best.x0 + rng.randfn(0, 1) * Tune.BOT_STAND_NOISE, -0.45, 0.45), "aim": best.a, "hold": hold_s, "hk": hk,
+				"drift": clampf(rng.randfn(0, 1) * Tune.BOT_DRIFT_NOISE, -1, 1), "wait": rng.randf_range(2.5, 4.0) if not (sim or quick) else 0.6, "flip": 0 }
 		var b: Dictionary = p.plan
 		var dx: float = b.x0 - x0
 		var da: float = b.aim - aim

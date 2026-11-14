@@ -78,8 +78,8 @@ void fragment() {
 	// oil: glossy for its length, fading over 1.5 m, then dry boards
 	float o = d < 0.0 ? 0.0 : d < oil ? 1.0 : d < oil + 1.5 ? 1.0 - (d - oil) / 1.5 : 0.0;
 	ALBEDO = col * dim;
-	ROUGHNESS = d < 0.0 ? 0.5 : 0.5 - 0.42 * o + (d > head - 0.5 ? 0.06 : 0.0);
-	SPECULAR = 0.5 + 0.2 * o;
+	ROUGHNESS = d < 0.0 ? 0.5 : 0.5 - 0.34 * o + (d > head - 0.5 ? 0.06 : 0.0);
+	SPECULAR = 0.5 + 0.1 * o;
 	METALLIC = 0.0;
 }
 

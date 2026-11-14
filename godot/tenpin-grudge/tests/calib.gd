@@ -35,6 +35,26 @@ func _ready() -> void:
 		lane._pin_mat.friction = c[0]; lane._pin_mat.bounce = c[1]; Tune  # spin damp and deck set below
 		lane.set_meta("spin_damp", c[2])
 		lane._lane_mat.friction = c[3]
+		var pk := 0
+		for i in 24:                                         # exact pocket hits, medium left hook, 8 m/s
+			var best := 0.0
+			var miss := 9.0
+			for a in range(-40, 41):
+				var rr := deg_to_rad(a / 10.0)
+				var pts := Tune.trace(0.3, Tune.START, sin(rr) * 8.0, cos(rr) * 8.0, -0.6, true, Tune.HOOK, 12.0)
+				var e := absf(pts[pts.size() - 1].x - 0.065)
+				if e < miss:
+					miss = e
+					best = a / 10.0
+			lane.rng.seed = 500 + i
+			lane.rack(); lane.oil = 12.0; lane.spin = -0.6
+			lane.bowl(0.3, best, 8.0, false, Tune.BALLS[1])
+			var k := 0
+			while not lane.settled() and k < 240 * 12:
+				await get_tree().physics_frame
+				k += 1
+			if lane.result == 10: pk += 1
+		print("%s pocket: %d/24 strike" % [c, pk])
 		for assist in [0, 2]:
 			var rng := RandomNumberGenerator.new()
 			rng.seed = 5

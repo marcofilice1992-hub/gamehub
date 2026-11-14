@@ -163,6 +163,8 @@ func bowl(x: float, ang_deg: float, v: float, with_bumpers: bool, ball_def: Dict
 	b.axis_lock_angular_x = true; b.axis_lock_angular_y = true; b.axis_lock_angular_z = true
 	b.continuous_cd = true
 	b.can_sleep = false
+	b.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE   # the project's default damping would slow the ball and bend the hook off its traced path
+	b.linear_damp = 0.0
 	b.contact_monitor = true
 	b.max_contacts_reported = 8
 	var c := CollisionShape3D.new(); c.shape = _ball_shape; b.add_child(c)

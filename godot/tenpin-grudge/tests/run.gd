@@ -36,6 +36,59 @@ func scoring() -> void:
 	var tl := Score.tally([10, 5, 5, 3, 4] + rep(0, 14))
 	ok(tl.strikes == 1 and tl.spares == 1, "tally counts a strike and a spare")
 
+func flow() -> void:
+	# roll-offs: level after ten frames means a one-ball roll-off, up to three, then a draw
+	for s in pads.seats: pads.assign(pads.BOT, s)
+	store.data.last_loser = 0
+	var m := Match.new()
+	get_tree().root.add_child(m)
+	m.setup(pads.seats, 1, true)
+	ok(m.order[0] == 1, "the winner of the last match leads off")
+	m.P[0].rolls = rep(0, 20)
+	m.P[1].rolls = rep(0, 20)
+	var t := m.plan()
+	ok(t.get("ro", 0) == 1, "level after ten frames starts roll-off 1")
+	m.ro = [[5, 5]]
+	ok(m.plan().get("ro", 0) == 2, "a level roll-off goes to another")
+	m.ro = [[5, 5], [3, 3], [2, 2]]
+	ok(m.plan().is_empty(), "three level roll-offs end the match")
+	m.end()
+	ok(m.won == -1, "and it is a draw")
+	m.ro = [[5, 7]]
+	m.end()
+	ok(m.won == 1, "a roll-off decides the winner")
+	m.P[0].rolls = rep(10, 12)
+	m.ro = []
+	m.end()
+	ok(m.won == 0, "higher score wins")
+	m.queue_free()
+	await get_tree().process_frame
+	# carry-over: a stick still held from the last shot does not start the next swing
+	var m2 := Match.new()
+	get_tree().root.add_child(m2)
+	m2.setup(pads.seats, 2, true)
+	m2.begin()
+	var seat = m2.cur.seat
+	m2.set_process(false)                                    # drive it by hand
+	for i in 120:
+		seat.ctl = { "ay": 1.0 }
+		await get_tree().process_frame
+		m2.update(1.0 / 60)
+	ok(m2.state == "stance", "holding the stick through the turn change does not swing (%s)" % m2.state)
+	seat.ctl = {}
+	await get_tree().process_frame
+	m2.update(1.0 / 60)
+	seat.ctl = { "ay": 1.0 }
+	await get_tree().process_frame
+	m2.update(1.0 / 60)
+	ok(m2.state == "swing", "let go and pull again, and the swing starts (%s)" % m2.state)
+	seat.ctl = { "ay": 1.0, "buttons": { "b": 1.0 } }
+	await get_tree().process_frame
+	m2.update(1.0 / 60)
+	ok(m2.state == "stance", "B cancels the swing")
+	m2.queue_free()
+	await get_tree().process_frame
+
 func pinfall() -> void:
 	var lane := Lane.new()
 	get_tree().root.add_child(lane)
@@ -140,6 +193,7 @@ func _ready() -> void:
 	store.memory = true
 	get_tree().root.get_node("Sfx").enabled = false
 	scoring()
+	await flow()
 	await pinfall()
 	var avg := [0.0, 0.0]
 	for i in 8:

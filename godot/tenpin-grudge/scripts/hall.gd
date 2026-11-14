@@ -84,7 +84,7 @@ func build(match_node: Match) -> void:
 	env.background_color = Color("#0A0914")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#5A5478")
-	env.ambient_light_energy = 0.35
+	env.ambient_light_energy = 0.5
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.0
@@ -114,7 +114,7 @@ func build(match_node: Match) -> void:
 	probe.position = Vector3(0, 1.4, -8)
 	probe.update_mode = ReflectionProbe.UPDATE_ONCE
 	probe.box_projection = true
-	probe.intensity = 0.8
+	probe.intensity = 0.5
 	probe.ambient_mode = ReflectionProbe.AMBIENT_DISABLED
 	add_child(probe)
 
@@ -129,7 +129,7 @@ func build(match_node: Match) -> void:
 	add_child(sun)
 	deck_light = SpotLight3D.new()
 	deck_light.light_color = Color("#FFF6EA")
-	deck_light.light_energy = 2.0
+	deck_light.light_energy = 1.1
 	deck_light.spot_range = 6.0
 	deck_light.spot_angle = 46.0
 	deck_light.shadow_enabled = true
@@ -137,14 +137,14 @@ func build(match_node: Match) -> void:
 	add_child(deck_light)
 	var front := SpotLight3D.new()
 	front.light_color = Color("#FFE8CC")
-	front.light_energy = 3.0
-	front.spot_range = 9.0
-	front.spot_angle = 30.0
+	front.light_energy = 3.5
+	front.spot_range = 10.0
+	front.spot_angle = 48.0
 	front.look_at_from_position(Vector3(0, 3, 0.5), Vector3(0, 0, -3))
 	add_child(front)
 	var decks := SpotLight3D.new()
 	decks.light_color = Color("#FFF1E4")
-	decks.light_energy = 2.2
+	decks.light_energy = 0.8
 	decks.spot_range = 4.4
 	decks.spot_angle = 77.0
 	decks.look_at_from_position(Vector3(0, 1.3, -(D + 0.4)), Vector3(0, 0, -(Tune.HEAD + 0.2)))
@@ -533,7 +533,7 @@ func _process(dt: float) -> void:
 	var col: Color = Tune.PCOL[c]
 	var fl := m.flash
 	# strikes and spares: the deck light, the lane-side lights and the screen all lift together, then settle
-	deck_light.light_energy = 2.0 * (1 + 1.6 * fl)
+	deck_light.light_energy = 1.1 * (1 + 0.8 * fl)
 	strip_mat.albedo_color = Color(col.r * (1.2 + 2.5 * fl), col.g * (1.2 + 2.5 * fl), col.b * (1.2 + 2.5 * fl))
 	screen_glow.light_color = col
 	screen_glow.light_energy = 1.0 + 3.0 * fl

@@ -40,16 +40,23 @@ var _demo := false
 var _shots := ""
 var _taken := {}
 var _frames := 0
+var _saved := 0
 
 func _capture(name: String) -> void:
 	if _shots == "" or _taken.has(name): return
 	_taken[name] = true
+	RenderingServer.render_loop_enabled = true               # draw only around a capture: software rendering is slow
+	for i in 4: await get_tree().process_frame
 	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png("%s/%s.png" % [_shots, name])
+	var img := get_viewport().get_texture().get_image()
+	if img: img.save_png("%s/%s.png" % [_shots, name])
 	print("shot ", name, " at frame ", _frames)
+	_saved += 1
+	RenderingServer.render_loop_enabled = false
 
 func _shots_step() -> void:
 	_frames += 1
+	if _frames == 1: RenderingServer.render_loop_enabled = false
 	if screen == Screen.JOIN:
 		if _frames == 20: _capture("01-seats")
 		if _frames == 40:
@@ -57,8 +64,8 @@ func _shots_step() -> void:
 			start_match()
 		return
 	if screen == Screen.RESULTS:
-		_capture("09-results")
-		if _frames > 2: get_tree().quit()
+		_capture("10-results")                              # a layout check: the match was cut short after the pause shot
+		if _saved >= 10: get_tree().quit()
 		return
 	var m := match_node
 	if m == null: return
@@ -70,7 +77,17 @@ func _shots_step() -> void:
 	if key == "roll" and m.lane.hit and m.lane.t - m.lane.hit_t > 0.25: _capture("06-impact")
 	if key == "show" and m.t > 0.4: _capture("07-show")
 	if key == "replay" and m.t > 1.2: _capture("08-replay")
-	if _taken.size() >= 8 or m.n > 6: get_tree().quit()
+	if _saved == 8 and not paused:
+		paused = true
+		get_tree().paused = true
+	if paused and _saved == 8: _capture("09-pause")
+	if _saved == 9 and paused:
+		paused = false
+		get_tree().paused = false
+		m.won = 0
+		m.state = "over"
+		m.finish()
+	if m.n > 8: get_tree().quit()
 
 func _apply_window() -> void:
 	if DisplayServer.get_name() == "headless": return
@@ -159,6 +176,7 @@ func end_match() -> void:
 func _on_finished(r: Dictionary) -> void:
 	result = r
 	screen = Screen.RESULTS
+	if hud: hud.visible = false                               # the results screen stands on its own over the hall
 	menu_i = 0
 	Sfx.play("win")
 

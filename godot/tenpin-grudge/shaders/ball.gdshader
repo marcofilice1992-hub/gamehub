@@ -20,7 +20,7 @@ void fragment() {
 	vec3 p = n * 2.2;
 	float sw = noise(p + vec3(noise(p * 1.7) * 2.0, 0.0, noise(p * 1.3 + 4.0) * 2.0));
 	float band = sin(sw * 14.0 + n.y * 3.0);
-	vec3 col = mix(base * 0.72, mix(base, vec3(1.0), 0.32), smoothstep(-0.6, 0.9, band));
+	vec3 col = mix(base * 0.85, mix(base, vec3(1.0), 0.38), smoothstep(-0.6, 0.9, band));
 	col += 0.06 * smoothstep(0.92, 1.0, sin(noise(p * 4.0) * 40.0));
 	float rough = 0.18;
 	// finger holes, grouped around +z; the mark around -z
