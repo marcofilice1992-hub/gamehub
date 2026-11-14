@@ -65,7 +65,14 @@ var _palm := Vector3.ZERO       # the right palm's normal, in the hand bone's fr
 var _hand_r := -1
 var _hand_l := -1
 
-static var _meshes := {}        # body path -> the body mesh with its T-pose positions in CUSTOM0
+static var _meshes := {}        # body path -> the body mesh with its T-pose positions stored
+static var _slimmed := {}       # body path -> the slimmed body mesh
+## How much each part of the men's (bodybuilder) base body is drawn in towards its bone: 1 is unchanged.
+const SLIM := {
+	"upperarm_l": 0.74, "upperarm_r": 0.74, "lowerarm_l": 0.86, "lowerarm_r": 0.86,
+	"clavicle_l": 0.8, "clavicle_r": 0.8, "neck_01": 0.86,
+	"thigh_l": 0.93, "thigh_r": 0.93, "calf_l": 0.92, "calf_r": 0.92,
+}
 static var _clips: AnimationLibrary
 
 ## look: { body ("m"/"f"), skin, shirt, panel, trousers, shoes, hair, hair_col, height }
@@ -85,6 +92,7 @@ func build(lk: Dictionary, cast_shadows := true) -> void:
 	for m in sk.find_children("*", "MeshInstance3D", false, false):
 		if main == null or m.mesh.surface_get_array_len(0) > main.mesh.surface_get_array_len(0): main = m
 	var src_mesh: Mesh = main.mesh
+	if kind == "m": src_mesh = _slim(BODIES[kind], src_mesh, main.skin, sk)     # an everyday build, not a superhero's
 	main.mesh = _dressable(BODIES[kind], src_mesh)
 	mat = ShaderMaterial.new()
 	mat.shader = load("res://shaders/body.gdshader")
@@ -99,7 +107,7 @@ func build(lk: Dictionary, cast_shadows := true) -> void:
 	mat.set_shader_parameter("shoes", Color(lk.shoes))
 	main.material_override = mat
 	# the clothes: a loose shirt and trousers, built from this body and skinned to the same skeleton
-	var fit: Dictionary = Outfit.make(BODIES[kind], src_mesh, main.skin, sk)
+	var fit: Dictionary = Outfit.make(BODIES[kind], src_mesh, main.skin, sk, Outfit.RELAXED if kind == "m" else Outfit.CLOSER)
 	var z: Dictionary = Outfit.zones(sk)
 	for g in ["shirt", "trousers"]:
 		var cm := ShaderMaterial.new()
@@ -145,6 +153,7 @@ func build(lk: Dictionary, cast_shadows := true) -> void:
 	mat.set_shader_parameter("sleeve_x", z.sleeve)
 	mat.set_shader_parameter("ankle_y", z.shoe)
 	mat.set_shader_parameter("cuff_y", z.cuff)
+	mat.set_shader_parameter("relief", 0.35 if kind == "m" else 0.7)     # how much of the texture's muscle definition shows
 	# the retarget: rest frames, parents, and the fix that hangs the T-pose arms down
 	for r in RIG:
 		var i := sk.find_bone(r[0])
@@ -178,6 +187,52 @@ func build(lk: Dictionary, cast_shadows := true) -> void:
 static func _hair_key(h: String) -> String:
 	const OLD := { "quiff": "parted", "ponytail": "long", "bob": "long", "bun": "buns", "buzz": "buzzed", "afro": "buzzed_f", "beanie": "beard" }
 	return h if HAIR.has(h) else OLD.get(h, "parted")
+
+## The men's base body is a bodybuilder's. This draws in the arms, deltoids, traps, neck and legs towards their
+## bones, and narrows the chest and lats (less of a V), by each vertex's skin weights, so the joins stay smooth.
+static func _slim(key: String, src: Mesh, skin: Skin, sk: Skeleton3D) -> ArrayMesh:
+	if _slimmed.has(key): return _slimmed[key]
+	var arr := src.surface_get_arrays(0)
+	var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = arr[Mesh.ARRAY_BONES]
+	var wts: PackedFloat32Array = arr[Mesh.ARRAY_WEIGHTS]
+	var per := bones.size() / v.size()
+	var at := func(b: String) -> Vector3: return sk.get_bone_global_rest(sk.find_bone(b)).origin
+	var child := { "upperarm_l": "lowerarm_l", "upperarm_r": "lowerarm_r", "lowerarm_l": "hand_l", "lowerarm_r": "hand_r",
+		"clavicle_l": "upperarm_l", "clavicle_r": "upperarm_r", "neck_01": "Head", "thigh_l": "calf_l", "thigh_r": "calf_r",
+		"calf_l": "foot_l", "calf_r": "foot_r" }
+	var seg := {}                                              # bind index -> [axis start, axis end, factor]
+	var torso := {}                                            # bind index -> how much it narrows the chest
+	for i in skin.get_bind_count():
+		var bn := String(skin.get_bind_name(i))
+		if bn == "" and skin.get_bind_bone(i) >= 0: bn = sk.get_bone_name(skin.get_bind_bone(i))
+		if SLIM.has(bn): seg[i] = [at.call(bn), at.call(child[bn]), SLIM[bn]]
+		if bn == "spine_03": torso[i] = 0.88
+		if bn == "spine_02": torso[i] = 0.95
+	for k in v.size():
+		var p := v[k]
+		var d := Vector3.ZERO
+		var tx := 0.0
+		for j in per:
+			var w := wts[k * per + j]
+			if w <= 0.0: continue
+			var b := bones[k * per + j]
+			if seg.has(b):
+				var a: Vector3 = seg[b][0]
+				var e: Vector3 = seg[b][1] - a
+				var t := clampf((p - a).dot(e) / e.length_squared(), -0.3, 1.2)
+				var c := a + e * t
+				d += (p - c) * (float(seg[b][2]) - 1.0) * w
+			if torso.has(b): tx += (1.0 - float(torso[b])) * w
+		p += d
+		p.x *= 1.0 - tx
+		v[k] = p
+	arr[Mesh.ARRAY_VERTEX] = v
+	var keep: int = Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS | (((1 << 12) - 1) << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT)
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr, [], {}, src.surface_get_format(0) & keep)
+	_slimmed[key] = am
+	return am
 
 ## The body mesh again, with each vertex's T-pose position stored for the clothes shader: x and y in UV2, z in
 ## COLOR.r (as z * 2 + 0.5; colour is 8-bit, about 2 mm steps, plenty for toe caps and the shirt front).

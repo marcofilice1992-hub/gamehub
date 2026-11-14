@@ -22,6 +22,7 @@ uniform float shoulder_x = 0.2;
 uniform float ankle_y = 0.13;
 uniform float armpit_y = 1.37;
 uniform float cuff_y = 0.14;
+uniform float relief = 1.0;     // how much of the normal map's muscle definition to keep
 uniform float chest_z = 0.1;
 
 varying vec3 rp;
@@ -81,5 +82,5 @@ void fragment() {
 	float cloth = clamp(shirt + legs + shoe, 0.0, 1.0);
 	ALBEDO = col;
 	ROUGHNESS = mix(rough, mix(0.72, 0.4, shoe), cloth);
-	NORMAL_MAP = mix(nrm, vec3(0.5, 0.5, 1.0), cloth * 0.85);
+	NORMAL_MAP = mix(nrm, vec3(0.5, 0.5, 1.0), max(cloth * 0.85, 1.0 - relief));
 }

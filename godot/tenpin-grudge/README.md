@@ -92,11 +92,14 @@ bot-against-bot matches.
 The bodies and hair are Quaternius's **Universal Base Characters** (male and female, CC0), and the clips are from his
 **Universal Animation Library** 1 and 2 (CC0): <https://quaternius.com>. `characters/LICENSE-Quaternius.txt` has the licence.
 
+- The men's base body is a bodybuilder's, so it is slimmed when it loads (`_slim()` in `scripts/bowler.gd`): arms,
+  deltoids, traps, neck and legs drawn in towards their bones, a narrower chest, and softer muscle shading.
 - Clothes are real, loose meshes (`scripts/outfit.gd`), built from each body when the game starts: a boxy, untucked
   bowling shirt that hangs straight down from the chest, with short flared sleeves, panels, piping, collar, buttons and
   cuffs; and straight-leg trousers, loose from the knee down, with a crease and a break over the shoes. They keep the
   body's skin weights so they move with it, except that the shirt hangs from the hips rather than the thighs and the
-  trouser cuffs follow the shins rather than the feet. Folds are bumped in by `shaders/cloth.gdshader`. Under the clothes
+  trouser cuffs follow the shins rather than the feet. The women's cut is closer: the shirt follows the waist, with
+  less flare, and the trousers are slimmer. Folds are bumped in by `shaders/cloth.gdshader`. Under the clothes
   the skin is pulled in 3 cm so it can't poke through. Shoes are still painted on.
 - Clips play for the idles and reactions: waiting, folded arms when the other player strikes, a nod and thumbs up for a
   spare, hands round the mouth for a heckle, a dance for the match winner and a head shake for the loser. The neighbours

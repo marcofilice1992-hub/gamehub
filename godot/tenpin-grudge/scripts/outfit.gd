@@ -1,7 +1,7 @@
 class_name Outfit
 ## Loose bowling clothes, built from a Quaternius base body when the game starts (once per body, then shared):
-##   * a boxy, untucked bowling shirt that hangs straight down from the chest, with short, flared sleeves;
-##   * straight-leg trousers, loose from the knee down, breaking over the shoes.
+##   * an untucked bowling shirt with short sleeves: boxy, hanging straight down from the chest, in the relaxed cut;
+##   * trousers breaking over the shoes: straight and loose from the knee down in the relaxed cut, slimmer in the closer.
 ## Each garment is the body's own triangles over that region, pushed out and reshaped in the T-pose, with flat hems
 ## cut where it ends. The garments keep the body's skin weights, so they move with the skeleton; the shirt's weights
 ## are moved off the legs onto the pelvis so its hem hangs from the hips instead of riding up with each step, and the
@@ -9,9 +9,11 @@ class_name Outfit
 ## shape (x, y in UV2, z in COLOR.r as z * 2 + 0.5) for the cloth shader's pattern.
 ## The rig faces +Z in this space, +Y is up.
 
-const SHIRT_OFF := 0.016        # how far the shirt stands off the body
-const TROUSER_OFF := 0.01
-const CUFF_R := 0.07            # trouser leg radius from the knee down (a straight leg)
+## How each cut fits. A relaxed cut (the men's): the shirt stands off the body and hangs straight down from the chest,
+## the trousers are straight from the knee. A closer cut (the women's): the shirt follows the waist more, with less
+## flare at the sleeves and hem, and the trousers are slimmer.
+const RELAXED := { "shirt_off": 0.016, "hang": 1.0, "sleeve_flare": 0.005, "hem_flare": 0.008, "trouser_off": 0.01, "cuff_r": 0.07, "thigh_ease": 0.006 }
+const CLOSER := { "shirt_off": 0.009, "hang": 0.35, "sleeve_flare": 0.004, "hem_flare": 0.004, "trouser_off": 0.006, "cuff_r": 0.056, "thigh_ease": 0.002 }
 
 static var _cache := {}
 
@@ -39,7 +41,7 @@ static func zones(sk: Skeleton3D) -> Dictionary:
 	}
 
 ## { shirt: ArrayMesh, trousers: ArrayMesh } for this body.
-static func make(key: String, src: Mesh, skin: Skin, sk: Skeleton3D) -> Dictionary:
+static func make(key: String, src: Mesh, skin: Skin, sk: Skeleton3D, cut: Dictionary = RELAXED) -> Dictionary:
 	if _cache.has(key): return _cache[key]
 	var z := zones(sk)
 	var bind := {}                                              # bone name -> bind index in the skin
@@ -56,8 +58,8 @@ static func make(key: String, src: Mesh, skin: Skin, sk: Skeleton3D) -> Dictiona
 		for b in ["foot_", "ball_"]:
 			if bind.has(b + s): trouser_w[bind[b + s]] = bind["calf_" + s]
 	var out := {
-		"shirt": _garment(arr, z, true, shirt_w),
-		"trousers": _garment(arr, z, false, trouser_w),
+		"shirt": _garment(arr, z, true, shirt_w, cut),
+		"trousers": _garment(arr, z, false, trouser_w, cut),
 	}
 	_cache[key] = out
 	return out
@@ -82,7 +84,7 @@ static func _clamp(p: Vector3, z: Dictionary, shirt: bool) -> Vector3:
 		p.y = clampf(p.y, z.cuff, z.top)
 	return p
 
-static func _garment(arr: Array, z: Dictionary, shirt: bool, reweight: Dictionary) -> ArrayMesh:
+static func _garment(arr: Array, z: Dictionary, shirt: bool, reweight: Dictionary, cut: Dictionary) -> ArrayMesh:
 	var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 	var nrm: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
 	var uv: PackedVector2Array = arr[Mesh.ARRAY_TEX_UV]
@@ -125,12 +127,12 @@ static func _garment(arr: Array, z: Dictionary, shirt: bool, reweight: Dictionar
 		var nn := nrm[k].normalized()
 		if shirt:
 			var arm := _is_arm(p, z)
-			var off := SHIRT_OFF
-			if arm: off += 0.008 * smoothstep(z.shoulder, z.sleeve, absf(p.x))      # the sleeves flare to the cuff
-			else: off += 0.008 * smoothstep(z.hem + 0.08, z.hem, p.y)             # and the hem stands off a little more
+			var off: float = cut.shirt_off
+			if arm: off += cut.sleeve_flare * smoothstep(z.shoulder, z.sleeve, absf(p.x))      # the sleeves flare to the cuff
+			else: off += cut.hem_flare * smoothstep(z.hem + 0.08, z.hem, p.y)                 # and the hem stands off a little more
 			var q := p + nn * off
 			if not arm and p.y < z.chest:                                           # below the chest it hangs straight down
-				var t := smoothstep(z.chest, z.chest - 0.12, p.y)
+				var t: float = smoothstep(z.chest, z.chest - 0.12, p.y) * cut.hang
 				var cz: float = ring[ring.size() - 1]
 				var d := Vector2(q.x, q.z - cz)
 				var r := d.length()
@@ -140,7 +142,7 @@ static func _garment(arr: Array, z: Dictionary, shirt: bool, reweight: Dictionar
 					q.x = d.x; q.z = d.y + cz
 			pos[i] = q
 		else:
-			var q := p + nn * TROUSER_OFF
+			var q: Vector3 = p + nn * float(cut.trouser_off)
 			if p.y < z.crotch:                                                      # each leg: straight from the knee down
 				var s := "l" if p.x > 0.0 else "r"
 				var th: Vector3 = z["thigh_" + s]
@@ -149,7 +151,7 @@ static func _garment(arr: Array, z: Dictionary, shirt: bool, reweight: Dictionar
 				var d := Vector2(q.x - c.x, q.z - c.z)
 				var r := d.length()
 				var t := smoothstep(z.knee + 0.14, z.knee - 0.04, p.y)
-				var R := lerpf(r + 0.006, maxf(r, CUFF_R + 0.006 * smoothstep(z.knee, z.cuff, p.y)), t)
+				var R := lerpf(r + cut.thigh_ease, maxf(r, cut.cuff_r + 0.006 * smoothstep(z.knee, z.cuff, p.y)), t)
 				if r > 1e-4: d = d / r * maxf(r, R)
 				q.x = c.x + d.x; q.z = c.z + d.y
 			pos[i] = q
