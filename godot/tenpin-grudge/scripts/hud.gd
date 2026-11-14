@@ -145,7 +145,7 @@ func _draw() -> void:
 	if not b.is_empty() and st != "intro":
 		var a := clampf(minf(b.t / 0.3, (1.6 - b.t) / 0.2), 0, 1)
 		var w := 560.0
-		Gx.rrect(self, W / 2 - w / 2, 236, w, 104, 52, Color(0.027, 0.035, 0.05, 0.9 * a), _fade(Tune.PCOL[b.c], a), 3)
+		Gx.screen(self, W / 2 - w / 2, 236, w, 104, 52, Tune.PCOL[b.c], a)
 		Gx.marker(self, b.c, W / 2 - w / 2 + 56, 288, 15, { "color": _fade(Tune.PCOL[b.c], a) })
 		Gx.text(self, b.text, W / 2 - w / 2 + 92, 284, { "size": Gx.FS.md, "weight": 700, "alpha": a })
 		Gx.text(self, b.sub, W / 2 - w / 2 + 92, 320, { "size": Gx.FS.xs, "color": Tune.MUTED, "alpha": a })
@@ -169,7 +169,7 @@ func _draw() -> void:
 		var x: float = W - 80 - w if hk.c else 80.0
 		var y := 300.0
 		var hc := _fade(Tune.PCOL[hk.c], a)
-		Gx.rrect(self, x, y, w, 76, 38, Color(0.027, 0.035, 0.05, 0.92 * a), hc, 3)
+		Gx.screen(self, x, y, w, 76, 38, Tune.PCOL[hk.c], a)
 		var tx: float = x + (w - 70 if hk.c else 70.0)
 		draw_colored_polygon(PackedVector2Array([Vector2(tx, y + 74), Vector2(x + (w - 40 if hk.c else 40.0), y + 104), Vector2(x + (w - 100 if hk.c else 100.0), y + 74)]), hc)
 		Gx.marker(self, hk.c, x + 40, y + 38, 12, { "color": hc })
@@ -183,17 +183,23 @@ func _draw() -> void:
 		Gx.text(self, "Strike replay", x + 64, y + 58, { "size": Gx.FS.sm, "weight": 700 })
 		Gx.hints(self, x + w - 150, y + 48, [["a", "Skip"]], Pads.last_type)
 	var q := m.call
-	if not q.is_empty():
+	if not q.is_empty() and st == "show":                  # the lane screen in the hall carries the word; the read sits below the pins
+		var a2 := clampf(minf((q.max - q.t) / 0.12, q.t / 0.35), 0, 1)
+		if m.read_text != "":
+			var rw2 := Gx.measure(m.read_text, { "size": Gx.FS.sm }) + 64
+			Gx.screen(self, W / 2 - rw2 / 2, H - 150, rw2, 60, 30, Color(Tune.PCOL[q.c], 0.6), a2, 2.0)
+			Gx.text(self, m.read_text, W / 2, H - 110, { "size": Gx.FS.sm, "align": "center", "alpha": a2 })
+	elif not q.is_empty():
 		var a := clampf(minf((q.max - q.t) / 0.12, q.t / 0.35), 0, 1)
 		var big: bool = q.text == "Strike" or q.text == "Turkey"
 		var size: int = Gx.FS.xl if big else Gx.FS.lg
 		var w := Gx.measure(q.text, { "size": size, "weight": 700 }) + 120
-		Gx.rrect(self, W / 2 - w / 2, 250, w, 150 if big else 110, 28, Color(0.027, 0.035, 0.05, 0.82 * a), _fade(Tune.PCOL[q.c], a), 3)
+		Gx.screen(self, W / 2 - w / 2, 250, w, 150 if big else 110, 28, Tune.PCOL[q.c], a)
 		Gx.text(self, q.text, W / 2, 358 if big else 326, { "size": size, "weight": 700, "color": _fade(Tune.PCOL[q.c], a), "align": "center" })
 		if q.sub != "": Gx.text(self, q.sub, W / 2, 444 if big else 404, { "size": Gx.FS.sm, "weight": 500, "align": "center", "alpha": a })
 		if m.read_text != "" and st == "show":
 			var rw := Gx.measure(m.read_text, { "size": Gx.FS.sm }) + 64
-			Gx.rrect(self, W / 2 - rw / 2, 476, rw, 56, 28, Color(0.027, 0.035, 0.05, 0.85 * a), _fade(Gx.LINE2, a))
+			Gx.screen(self, W / 2 - rw / 2, 476, rw, 56, 28, Gx.LINE2, a, 2.0)
 			Gx.text(self, m.read_text, W / 2, 513, { "size": Gx.FS.sm, "align": "center", "alpha": a })
 	if st == "over" or st == "done":
 		var w := m.won
@@ -213,58 +219,80 @@ func _perf() -> void:
 func _fade(c: Color, a: float) -> Color:
 	return Color(c.r, c.g, c.b, c.a * a)
 
-## Both scorecards, the lead, and what the trailing player needs.
+## Which frame a player's latest ball went into.
+static func last_frame(rolls: Array) -> int:
+	if rolls.is_empty(): return -1
+	var fr := Score.frames(rolls)
+	var n := 0
+	for f in 10:
+		n += fr[f].balls.size()
+		if n >= rolls.size(): return f
+	return 9
+
+var _seen := [0, 0]
+var _card_y := 0.0                 # the scorecard slides away while the lane screen in the hall shows the result
+var _pop := [0.0, 0.0]
+var _pop_f := [-1, -1]
+
+## The scorecard, drawn as a close-up of the screen over lane 14: the same indigo glass, neon frame in the bowler's
+## colour, lane badge and frame boxes. A new mark lights its box for a moment, as it lands on the screen in the hall.
 func card() -> void:
+	var want := -230.0 if m.state == "show" else 0.0
+	_card_y += (want - _card_y) * (1.0 - exp(-10.0 * get_process_delta_time()))
+	if _card_y < -225: return
 	var x := 60.0
-	var y := 22.0
-	var rh := 72.0
-	var nw := 190.0
-	var fw := 128.0
-	var tw := 1800 - nw - fw * 9 - 180
+	var y := 14.0 + _card_y
+	var w := 1800.0
+	var rh := 60.0
+	var h := 12 + rh * 2 + 6 + 12
 	var P := m.P
 	var done := m.state == "over" or m.state == "done"
-	Gx.panel(self, x, y, 1800, rh * 2 + 12)
+	var acc: Color = Tune.TEXT if done and m.won < 0 else Tune.PCOL[m.cur.c]
+	var dt := get_process_delta_time()
+	Gx.grad_rrect(self, x, y, w, h, 18, Gx.SCREEN_TOP, Gx.SCREEN_BOT)
+	Gx.glow_rrect(self, x, y, w, h, 18, acc, 3.0, 0.8 + 1.2 * m.flash)
+	# lane badge, as on the screens over the lanes
+	Gx.rrect(self, x + 16, y + 16, 92, h - 32, 12, acc)
+	Gx.text(self, "LANE", x + 62, y + 50, { "size": 17, "weight": 800, "color": Color("#0B0A14"), "align": "center", "track": 2.0 })
+	Gx.text(self, "14", x + 62, y + 104, { "size": 50, "weight": 800, "color": Color("#0B0A14"), "align": "center" })
+	var fx0 := x + 330.0
+	var fw := 118.0
 	for c in 2:
 		var p: Dictionary = P[m.by(c)]
 		var fr := Score.frames(p.rolls)
-		var ry := y + 6 + c * rh
+		var ry := y + 12 + c * (rh + 6)
 		var on: bool = p == m.cur and not done
 		var col: Color = Tune.PCOL[c]
-		if on: Gx.rrect(self, x + 6, ry + 2, 1788, rh - 4, 10, Gx.PSOFT[c])
-		Gx.marker(self, c, x + 34, ry + rh / 2, 11)
-		Gx.text(self, Tune.NAMES[c], x + 58, ry + rh / 2 + 9, { "size": Gx.FS.sm, "weight": 700, "color": Tune.TEXT if on else Tune.MUTED })
-		var fx := x + nw
+		if p.rolls.size() > _seen[c]:
+			_pop[c] = 1.0
+			_pop_f[c] = last_frame(p.rolls)
+		_seen[c] = p.rolls.size()
+		_pop[c] = maxf(0.0, _pop[c] - dt * 1.4)
+		if on: Gx.rrect(self, x + 124, ry, w - 140, rh, 12, Color(col.r, col.g, col.b, 0.13))
+		Gx.marker(self, c, x + 152, ry + rh / 2, 11)
+		Gx.text(self, Tune.NAMES[c].to_upper(), x + 176, ry + rh / 2 + 11, { "size": 30, "weight": 800, "color": col if on else Color(0.93, 0.92, 0.97, 0.75), "glow": col if on else Color(0, 0, 0, 0) })
+		var fx := fx0
 		for f in 10:
 			var q: Dictionary = fr[f]
-			var w := 180.0 if f == 9 else fw
+			var fwid := 168.0 if f == 9 else fw
 			var live: bool = on and not m.turn.is_empty() and not m.turn.ro and m.turn.f == f
-			Gx.rrect(self, fx + 3, ry + 5, w - 6, rh - 10, 8, Color(1, 1, 1, 0.07) if live else null, col if live else Gx.LINE2, 3.0 if live else 2.0)
-			Gx.text(self, "  ".join(Score.marks(q, f)), fx + w - 16, ry + 31, { "size": Gx.FS.xs, "weight": 500, "mono": true, "align": "right" })
+			var pop: float = _pop[c] if _pop_f[c] == f else 0.0
+			var fill := Color(1, 1, 1, 0.04).lerp(Color(col.r, col.g, col.b, 0.55), pop)
+			if live: fill = Color(1, 1, 1, 0.09)
+			Gx.rrect(self, fx + 3, ry + 4, fwid - 6, rh - 8, 8, fill, null)
+			if live: Gx.glow_rrect(self, fx + 3, ry + 4, fwid - 6, rh - 8, 8, col, 2.5, 0.8)
+			else: Gx.rrect(self, fx + 3, ry + 4, fwid - 6, rh - 8, 8, null, Color(1, 1, 1, 0.16), 1.5)
+			Gx.text(self, "  ".join(Score.marks(q, f)), fx + fwid - 14, ry + 27, { "size": 21, "weight": 700, "mono": true, "align": "right", "color": Color("#F4F6FA") })
 			var bs: Array = q.balls
-			if q.total >= 0: Gx.text(self, str(q.total), fx + 16, ry + 60, { "size": Gx.FS.xs, "weight": 700, "mono": true })
-			elif q.done or (f == 9 and bs.size() and (bs[0] == 10 or bs[0] + (bs[1] if bs.size() > 1 else 0) == 10)): Gx.text(self, "bonus", fx + 16, ry + 60, { "size": Gx.FS.xs, "color": Tune.FAINT })
-			fx += w
-		Gx.text(self, str(Score.shown(p.rolls)), x + 1800 - tw + 96, ry + rh / 2 + 13, { "size": Gx.FS.md, "weight": 700, "mono": true, "align": "right", "color": col if on else Tune.TEXT })
-		Gx.text(self, "max %d" % Score.final_score(Score.fill(p.rolls, true)), x + 1800 - 22, ry + rh / 2 + 9, { "size": Gx.FS.xs, "mono": true, "align": "right", "color": Tune.FAINT })
-	# the line under the card
-	var a: Dictionary = P[m.by(0)]
-	var b: Dictionary = P[m.by(1)]
-	var sa := Score.shown(a.rolls)
-	var sb := Score.shown(b.rolls)
-	var msg := ""
-	if not m.ro.is_empty():
-		var r: Array = m.ro.back()
-		msg = "Roll-off %d of 3: Blue %s, Amber %s" % [m.ro.size(), "to bowl" if r[a.n] == null else str(r[a.n]), "to bowl" if r[b.n] == null else str(r[b.n])]
-	else:
-		var lead: Dictionary = P[m.order[0]]
-		var chase: Dictionary = P[m.order[1]]
-		if Score.frames(lead.rolls)[9].done and not Score.frames(chase.rolls)[9].done:
-			var need := Score.final_score(lead.rolls) + 1 - Score.final_score(Score.fill(chase.rolls, false))
-			var can := Score.final_score(Score.fill(chase.rolls, true)) > Score.final_score(lead.rolls)
-			if need <= 0: msg = Tune.NAMES[chase.c] + " is in front"
-			elif can: msg = "%s needs %d more to win" % [Tune.NAMES[chase.c], need]
-			else: msg = "%s cannot catch %s" % [Tune.NAMES[chase.c], Tune.NAMES[lead.c]]
-		else: msg = "Level" if sa == sb else "%s leads by %d" % [Tune.NAMES[0 if sa > sb else 1], absi(sa - sb)]
+			if q.total >= 0: Gx.text(self, str(q.total), fx + 14, ry + 50, { "size": 19, "weight": 700, "mono": true, "color": Color(0.93, 0.92, 0.97, 0.8) })
+			elif q.done or (f == 9 and bs.size() and (bs[0] == 10 or bs[0] + (bs[1] if bs.size() > 1 else 0) == 10)): Gx.text(self, "bonus", fx + 14, ry + 50, { "size": 17, "color": Tune.FAINT })
+			fx += fwid
+		Gx.text(self, str(Score.shown(p.rolls)), x + w - 120, ry + rh / 2 + 15, { "size": 42, "weight": 700, "mono": true, "align": "right", "color": col if on else Color("#F4F6FA") })
+		Gx.text(self, "MAX", x + w - 22, ry + rh / 2 - 4, { "size": 13, "weight": 700, "align": "right", "color": Tune.FAINT, "track": 1.5 })
+		Gx.text(self, str(Score.final_score(Score.fill(p.rolls, true))), x + w - 22, ry + rh / 2 + 16, { "size": 17, "mono": true, "align": "right", "color": Tune.FAINT })
+	# the line under the card: who leads, or what the trailing player needs
+	var msg := m.status_line()
 	var mw := Gx.measure(msg, { "size": Gx.FS.xs, "weight": 500 }) + 56
-	Gx.rrect(self, W / 2 - mw / 2, y + rh * 2 + 22, mw, 44, 22, Color(0.027, 0.035, 0.05, 0.86), Gx.LINE2)
-	Gx.text(self, msg, W / 2, y + rh * 2 + 52, { "size": Gx.FS.xs, "weight": 500, "align": "center" })
+	Gx.grad_rrect(self, W / 2 - mw / 2, y + h + 10, mw, 42, 21, Gx.SCREEN_TOP, Gx.SCREEN_BOT)
+	Gx.rrect(self, W / 2 - mw / 2, y + h + 10, mw, 42, 21, null, Color(acc.r, acc.g, acc.b, 0.55), 2.0)
+	Gx.text(self, msg, W / 2, y + h + 39, { "size": Gx.FS.xs, "weight": 500, "align": "center" })

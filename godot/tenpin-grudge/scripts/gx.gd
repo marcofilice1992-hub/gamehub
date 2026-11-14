@@ -44,6 +44,10 @@ static func text(ci: CanvasItem, s: String, x: float, y: float, o := {}) -> void
 	if o.get("base", "") == "middle": y += (f.get_ascent(size) - f.get_descent(size)) / 2.0
 	var col: Color = o.get("color", Tune.TEXT)
 	col.a *= o.get("alpha", 1.0)
+	if o.has("glow"):                                    # a soft halo, like the neon on the lane screens
+		var g: Color = o.glow
+		for k in [[int(size * 0.32), 0.10], [int(size * 0.18), 0.18], [int(size * 0.08), 0.35]]:
+			ci.draw_string_outline(f, Vector2(x, y), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size, k[0], Color(g.r, g.g, g.b, g.a * k[1] * o.get("alpha", 1.0)))
 	ci.draw_string(f, Vector2(x, y), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 
 static func eyebrow(ci: CanvasItem, s: String, x: float, y: float, o := {}) -> void:
@@ -67,8 +71,37 @@ static func rrect(ci: CanvasItem, x: float, y: float, w: float, h: float, r: flo
 		_boxes[key] = sb
 	ci.draw_style_box(sb, Rect2(x, y, w, h))
 
+## The lane-screen look, shared by the HUD scorecard and the screens over the lanes: deep indigo glass, top lighter.
+const SCREEN_TOP := Color(0.102, 0.094, 0.204, 0.94)
+const SCREEN_BOT := Color(0.043, 0.039, 0.090, 0.94)
+
+static func grad_rrect(ci: CanvasItem, x: float, y: float, w: float, h: float, r: float, top: Color, bot: Color) -> void:
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	var corners := [[x + w - r, y + r, -PI / 2], [x + w - r, y + h - r, 0.0], [x + r, y + h - r, PI / 2], [x + r, y + r, PI]]
+	for c in corners:
+		for i in 7:
+			var a: float = c[2] + PI / 2 * i / 6.0
+			var p := Vector2(c[0] + cos(a) * r, c[1] + sin(a) * r)
+			pts.append(p)
+			cols.append(top.lerp(bot, clampf((p.y - y) / h, 0, 1)))
+	ci.draw_polygon(pts, cols)
+
+## A neon outline: the line itself and a halo around it.
+static func glow_rrect(ci: CanvasItem, x: float, y: float, w: float, h: float, r: float, col: Color, lw := 3.0, glow := 1.0) -> void:
+	for k in [[9.0, 0.06], [5.0, 0.12], [2.5, 0.22]]:
+		var e: float = k[0]
+		rrect(ci, x - e, y - e, w + e * 2, h + e * 2, r + e, null, Color(col.r, col.g, col.b, col.a * k[1] * glow), lw + 1)
+	rrect(ci, x, y, w, h, r, null, col, lw)
+
+## Every HUD box shares the lane-screen glass, so the HUD reads as part of the hall's screens.
 static func panel(ci: CanvasItem, x: float, y: float, w: float, h: float, r := 14.0) -> void:
-	rrect(ci, x, y, w, h, r, PANEL, LINE)
+	screen(ci, x, y, w, h, r, Color(0.62, 0.55, 1.0, 0.22), 1.0, 1.5)
+
+## Indigo glass with an outline; a = overall opacity, for things that fade in and out.
+static func screen(ci: CanvasItem, x: float, y: float, w: float, h: float, r: float, border: Color, a := 1.0, lw := 3.0) -> void:
+	grad_rrect(ci, x, y, w, h, r, Color(SCREEN_TOP, SCREEN_TOP.a * a), Color(SCREEN_BOT, SCREEN_BOT.a * a))
+	rrect(ci, x, y, w, h, r, null, Color(border, border.a * a), lw)
 
 static func circle(ci: CanvasItem, x: float, y: float, r: float, fill = null, stroke = null, lw := 2.0) -> void:
 	if fill != null: ci.draw_circle(Vector2(x, y), r, fill, true, -1.0, true)

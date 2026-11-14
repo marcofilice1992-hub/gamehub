@@ -460,3 +460,22 @@ func bot(seat) -> void:
 		else:
 			ctl.ay = -1.0
 			ctl.ax = p.plan.drift
+
+## The line under the scorecard (and on the lane screen): who leads, or what the trailing player needs.
+func status_line() -> String:
+	var a: Dictionary = P[by(0)]
+	var b: Dictionary = P[by(1)]
+	var sa := Score.shown(a.rolls)
+	var sb := Score.shown(b.rolls)
+	if not ro.is_empty():
+		var r: Array = ro.back()
+		return "Roll-off %d of 3: Blue %s, Amber %s" % [ro.size(), "to bowl" if r[a.n] == null else str(r[a.n]), "to bowl" if r[b.n] == null else str(r[b.n])]
+	var lead: Dictionary = P[order[0]]
+	var chase: Dictionary = P[order[1]]
+	if Score.frames(lead.rolls)[9].done and not Score.frames(chase.rolls)[9].done:
+		var need := Score.final_score(lead.rolls) + 1 - Score.final_score(Score.fill(chase.rolls, false))
+		var can := Score.final_score(Score.fill(chase.rolls, true)) > Score.final_score(lead.rolls)
+		if need <= 0: return Tune.NAMES[chase.c] + " is in front"
+		if can: return "%s needs %d more to win" % [Tune.NAMES[chase.c], need]
+		return "%s cannot catch %s" % [Tune.NAMES[chase.c], Tune.NAMES[lead.c]]
+	return "Level" if sa == sb else "%s leads by %d" % [Tune.NAMES[0 if sa > sb else 1], absi(sa - sb)]

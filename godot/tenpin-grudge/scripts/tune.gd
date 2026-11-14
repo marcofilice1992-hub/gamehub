@@ -125,6 +125,7 @@ static func shot_read(hit: bool, hx: float, gutter: bool, fell: int) -> String:
 	if not hit: return "Missed the pins."
 	var cm := int(round(absf(hx) * 100.0))
 	var where := "Dead centre on the head pin" if cm < 1 else "%d cm %s of the head pin" % [cm, "right" if hx > 0 else "left"]
+	if fell == 10 and (cm < 3 or cm > 9): return where + (": high, but it carried." if cm < 3 else ": light, but it carried.")
 	if cm < 3: return where + ": too full, splits are likely. Aim for a pocket beside it."
 	if cm <= 9: return where + (": in the pocket." if fell == 10 else ": in the pocket. A little hook carries the corner pins.")
 	if cm <= 14: return where + ": light. Come in a touch closer to the head pin."

@@ -602,16 +602,27 @@ func _board(n: int, o: Dictionary) -> void:
 	B.draw.queue_redraw()
 	B.vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 
+## The screen over lane 14: both bowlers, like a real alley's overhead scoring. The HUD scorecard is a close-up of it.
+## After each ball it shows the result as the alley would: STRIKE, SPARE, the count, in the bowler's colour.
 func _display() -> void:
 	var t := m.turn
 	var over := m.state == "over" or m.state == "done"
-	var who: Dictionary = m.P[m.won] if over and m.won >= 0 else m.cur
-	var c: int = who.c
-	var sub := "Final" if over else "First to bowl" if m.state == "intro" else ("Roll-off %d" % t.ro) if not t.is_empty() and t.ro else ("Frame %d · Ball %d" % [t.f + 1, t.b + 1]) if not t.is_empty() else ""
 	var draw := over and m.won < 0
-	_board(0, { "lane": 14, "name": ("A draw" if draw else Tune.NAMES[c] + " wins") if over else Tune.NAMES[c], "sub": sub, "rolls": who.rolls.duplicate(), "score": Score.shown(who.rolls),
-		"accent": Tune.TEXT.to_html(false) if draw else Tune.PCOL[c].to_html(false), "mark": -1 if draw else c,
-		"live": -1 if over or t.is_empty() or t.ro or who != m.cur else t.f, "main": true })
+	var sub := "Final" if over else "First to bowl" if m.state == "intro" else ("Roll-off %d" % t.ro) if not t.is_empty() and t.ro else ("Frame %d · Ball %d" % [t.f + 1, t.b + 1]) if not t.is_empty() else ""
+	var acc: Color = Tune.TEXT if draw else Tune.PCOL[(m.P[m.won] if over and m.won >= 0 else m.cur).c]
+	var rows := []
+	for c in 2:
+		var p: Dictionary = m.P[m.by(c)]
+		rows.append({ "c": c, "rolls": p.rolls.duplicate(), "score": Score.shown(p.rolls), "on": p == m.cur and not over,
+			"live": t.f if p == m.cur and not over and not t.is_empty() and not t.ro else -1 })
+	var o := { "duo": true, "lane": 14, "sub": sub, "accent": acc.to_html(false), "rows": rows, "status": m.status_line(), "main": true }
+	var q := m.call
+	if not q.is_empty() and (m.state == "show" or m.state == "replay"):
+		var age: float = q.max - q.t
+		o.call = { "text": q.text, "sub": q.sub, "c": q.c, "age": snappedf(age, 1.0 / 30.0), "left": snappedf(q.t, 1.0 / 30.0) }
+	elif over:
+		o.call = { "text": "A DRAW" if draw else Tune.NAMES[m.P[m.won].c] + " WINS", "sub": "", "c": -1 if draw else m.P[m.won].c, "age": 1.0, "left": 9.0 }
+	_board(0, o)
 
 # ---- every frame ----------------------------------------------------------------------------------------
 func _process(dt: float) -> void:
@@ -728,8 +739,10 @@ func _camera(dt: float) -> void:
 		var t := minf(m.t, 6.0)
 		px = 0.5 - t * 0.06; py = 0.3 + t * 0.012; pz = -(Tune.HEAD - 2.8 + t * 0.2)
 		lx = 0; ly = 0.17; lz = -(Tune.HEAD + 0.3); rate = 9
-	elif st == "roll" or st == "show":
-		if ln.hit or st == "show" or not ln.live or ln.ball == null:
+	elif st == "show":                                       # step back and look up a touch: the pins below, the lane screen above
+		px = 0.35; py = 0.75; pz = -(Tune.HEAD - 3.4); lx = 0; ly = 0.735; lz = -(Tune.HEAD + 0.5); rate = 3
+	elif st == "roll":
+		if ln.hit or not ln.live or ln.ball == null:
 			px = 0.5; py = 0.66; pz = -(Tune.HEAD - 2.7); lx = 0; ly = 0.2; lz = -(Tune.HEAD + 0.45); rate = 4
 		else:
 			var b := ln.ball.position
@@ -825,15 +838,22 @@ class BoardDraw extends Control:
 		draw_set_transform(Vector2.ZERO, 0, Vector2(k, k))
 		var acc := Color(o.accent)
 		draw_rect(Rect2(0, 0, 512, 256), Color("#05040A"))
-		Gx.rrect(self, 5, 5, 502, 246, 16, Color("#14122A"), Color(acc.r, acc.g, acc.b, 1.0 if o.main else 0.55), 4.0 if o.main else 2.5)
-		Gx.rrect(self, 20, 18, 72, 40, 10, acc)
-		Gx.text(self, str(o.lane), 56, 39, { "size": 28, "weight": 800, "color": Color("#0B0A14"), "align": "center", "base": "middle" })
-		Gx.text(self, String(o.sub).to_upper(), 490, 39, { "size": 18, "weight": 500, "color": Color(0.89, 0.9, 0.93, 0.62), "align": "right", "base": "middle" })
+		Gx.grad_rrect(self, 5, 5, 502, 246, 16, Gx.SCREEN_TOP, Gx.SCREEN_BOT)
+		if o.get("main", false): Gx.glow_rrect(self, 5, 5, 502, 246, 16, acc, 3.0, 1.0)
+		else: Gx.rrect(self, 5, 5, 502, 246, 16, null, Color(acc.r, acc.g, acc.b, 0.55), 2.5)
+		Gx.rrect(self, 20, 16, 64, 34, 9, acc)
+		Gx.text(self, str(o.lane), 52, 33, { "size": 24, "weight": 800, "color": Color("#0B0A14"), "align": "center", "base": "middle" })
+		Gx.text(self, String(o.sub).to_upper(), 490, 33, { "size": 16, "weight": 500, "color": Color(0.89, 0.9, 0.93, 0.62), "align": "right", "base": "middle" })
+		if o.get("duo", false): _duo(acc)
+		else: _single(acc)
+		if o.has("call"): _call(o.call)
+
+	func _single(acc: Color) -> void:
 		var nx := 22.0
 		if o.mark == 0 or o.mark == 1:
 			Gx.marker(self, o.mark, 38, 102, 13, { "color": acc })
 			nx = 64.0
-		Gx.text(self, String(o.name).to_upper(), nx, 118, { "size": 44, "weight": 800, "color": acc if o.main else Color("#ECEAF6") })
+		Gx.text(self, String(o.name).to_upper(), nx, 118, { "size": 44, "weight": 800, "color": Color("#ECEAF6") })
 		Gx.text(self, str(o.score), 490, 122, { "size": 58, "weight": 700, "mono": true, "color": Color("#F4F6FA"), "align": "right" })
 		var fr := Score.frames(o.rolls)
 		var bw := (468.0 - 9 * 4) / 10
@@ -845,3 +865,40 @@ class BoardDraw extends Control:
 			Gx.rrect(self, x, y, bw, 76, 6, Color(1, 1, 1, 0.10 if on else 0.04), acc if on else Color(1, 1, 1, 0.16), 3.0 if on else 1.5)
 			Gx.text(self, ("" if f == 9 else " ").join(Score.marks(q, f)), x + bw / 2, y + 28, { "size": 20, "weight": 500, "mono": true, "align": "center" })
 			if q.total >= 0: Gx.text(self, str(q.total), x + bw / 2, y + 62, { "size": 22, "weight": 700, "mono": true, "color": Color("#F4F6FA"), "align": "center" })
+
+	## Both bowlers: name and total on top, ten frames under, the bowler up highlighted.
+	func _duo(acc: Color) -> void:
+		for i in 2:
+			var r: Dictionary = o.rows[i]
+			var col: Color = Tune.PCOL[int(r.c)]
+			var ry := 58.0 + i * 96
+			if r.on: Gx.rrect(self, 14, ry - 4, 484, 92, 10, Color(col.r, col.g, col.b, 0.14))
+			Gx.marker(self, int(r.c), 32, ry + 16, 9, { "color": col })
+			Gx.text(self, Tune.NAMES[int(r.c)].to_upper(), 50, ry + 25, { "size": 26, "weight": 800, "color": col if r.on else Color("#ECEAF6"), "glow": col if r.on else Color(0, 0, 0, 0) })
+			Gx.text(self, str(r.score), 492, ry + 28, { "size": 36, "weight": 700, "mono": true, "color": Color("#F4F6FA"), "align": "right" })
+			var fr := Score.frames(r.rolls)
+			var cw := (472.0 - 9 * 3) / 10.4
+			var x := 20.0
+			for f in 10:
+				var q: Dictionary = fr[f]
+				var w := cw * 1.4 if f == 9 else cw
+				var live: bool = f == int(r.live)
+				Gx.rrect(self, x, ry + 40, w, 44, 5, Color(1, 1, 1, 0.10 if live else 0.04), col if live else Color(1, 1, 1, 0.16), 2.5 if live else 1.2)
+				Gx.text(self, ("" if f == 9 else " ").join(Score.marks(q, f)), x + w / 2, ry + 56, { "size": 13, "weight": 700, "mono": true, "align": "center" })
+				if q.total >= 0: Gx.text(self, str(q.total), x + w / 2, ry + 77, { "size": 15, "weight": 700, "mono": true, "color": Color("#F4F6FA"), "align": "center" })
+				x += w + 3
+
+	## The result, the way an alley's screens show it: a big word in the bowler's colour that punches in, then fades.
+	func _call(q: Dictionary) -> void:
+		var col: Color = Tune.TEXT if int(q.c) < 0 else Tune.PCOL[int(q.c)]
+		var a := clampf(minf(float(q.age) / 0.12, float(q.left) / 0.35), 0.0, 1.0)
+		var big: bool = q.text in ["Strike", "Turkey", "Spare"] or String(q.text).ends_with("WINS") or q.text == "A DRAW"
+		var punch := 1.0 + 0.35 * maxf(0.0, 1.0 - float(q.age) / 0.25)
+		Gx.rrect(self, 10, 54, 492, 192, 12, Color(0.02, 0.016, 0.05, 0.93 * a))
+		for i in 7:                                      # light bars sweeping behind the word
+			var bx := fmod(float(q.age) * 420.0 + i * 80.0, 600.0) - 60.0
+			draw_colored_polygon(PackedVector2Array([Vector2(bx, 246), Vector2(bx + 26, 246), Vector2(bx + 66, 54), Vector2(bx + 40, 54)]), Color(col.r, col.g, col.b, 0.10 * a))
+		var size := int((76 if big else 56) * punch)
+		var word: String = String(q.text).to_upper()
+		Gx.text(self, word, 256, 150 + size * 0.35, { "size": size, "weight": 800, "color": Color(col.r, col.g, col.b, a), "align": "center", "glow": Color(col.r, col.g, col.b, a) })
+		if q.sub != "": Gx.text(self, String(q.sub).to_upper(), 256, 222, { "size": 20, "weight": 700, "color": Color(0.93, 0.92, 0.97, 0.85 * a), "align": "center", "track": 2.0 })
