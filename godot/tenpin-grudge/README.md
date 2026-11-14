@@ -72,7 +72,9 @@ An RTX 3060 Ti should hold High at 1080p; try Ultra, and use F3 to check.
 | `main.gd` | Seats, pause menu, results |
 
 Physics runs at 240 ticks a second. Hook and friction are applied every tick, so a shot plays the same at any frame rate.
-Pins and ball are drawn blended between the last two ticks, so they move evenly on a 60, 144 or 165 Hz screen.
+Pins and ball are drawn from the last few states the physics produced, on a smooth clock that runs at the lane's pace
+and sits three ticks (12 ms) behind, so they move evenly on a 60, 144 or 165 Hz screen and in slow motion, where the
+physics only steps on some ticks. Slow replays blend between recorded frames. The ball turns with the hand that holds it.
 Every rack gets a fresh physics world, so the same shot on the same rack always counts the same pins.
 
 ## Checks

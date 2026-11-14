@@ -186,12 +186,13 @@ func update(dt: float) -> void:
 			Sfx.play("tg-heckle")
 			s.rumble(0.35, 220, 0.6)
 	if state == "replay":
-		var i := rp0 + int(t * 60 * Tune.REPLAY_SPEED)
+		var fi := t * 60 * Tune.REPLAY_SPEED                 # recorded at 60 a second, played slower: blend between frames
+		var i := rp0 + int(fi)
 		if i >= lane.rec.size() or lane.rec[i][88] > rp_end or P.any(func(q): return not q.seat.bot and q.seat.pressed("a")):
 			rp_frame = null
 			Sfx.play("tg-sweep")
 			begin()
-		else: rp_frame = lane.rec[i]
+		else: rp_frame = Lane.blend_frames(lane.rec[i], lane.rec[mini(i + 1, lane.rec.size() - 1)], fi - floorf(fi))
 		return
 	if state == "stance":
 		var key: bool = s.keyboard

@@ -269,6 +269,10 @@ func ball_in_hand() -> Vector3:
 	var g := _bone_xform(_hand_r)
 	return g.origin + g.basis.y.normalized() * 0.055 * scale.x + (g.basis * _palm).normalized() * 0.085 * scale.x
 
+## Which way the right hand is turned, in the world.
+func hand_rot() -> Quaternion:
+	return _bone_xform(_hand_r).basis.orthonormalized().get_rotation_quaternion()
+
 ## Where the ball sits when it is held at the chest in both hands.
 func ball_at_chest() -> Vector3:
 	var r := _bone_xform(_hand_r).origin

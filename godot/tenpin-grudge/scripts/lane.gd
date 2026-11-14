@@ -242,18 +242,45 @@ func settled() -> bool:
 var pace := 1.0
 var _acc := 0.0
 
-## Where to draw a body this frame. Physics ticks 240 times a second and the screen refreshes at its own rate (60, 144, 165...),
-## so drawing bodies where the last tick left them would move them in uneven steps. Each tick keeps where every body was
-## before the step; drawing blends from there to where it is now by how far the frame is into the next tick.
-var _snap := {}
-var _ball_v := Vector3.ZERO      # the ball's velocity before the latest step                  # instance id -> Transform3D before the latest step
+## Where to draw a body this frame. Physics ticks 240 times a second and the screen refreshes at its own rate (60, 144,
+## 165...), so drawing bodies where the last tick left them moves them in uneven hops (at 144 Hz a frame holds one tick
+## or two). Instead the lane keeps the last few states the physics actually produced, each stamped with its step
+## number, and draws bodies on a smooth clock that runs at the lane's pace: steps done + the accumulator + the pace times
+## how far the frame is into the next tick. That clock is drawn DRAW_LAG steps behind (about 12 ms at full speed), which
+## is always inside the kept states, so the picture moves evenly at any frame rate and in slow motion, where the physics
+## only steps on some ticks. (A step's result reaches the nodes at the start of the next tick, hence the lag of three.)
+const DRAW_LAG := 3.0
+var _snap := {}                  # instance id -> Transform3D before the latest step
+var _ball_v := Vector3.ZERO      # the ball's velocity before the latest step
+var _steps := 0                  # physics steps taken
+var _went := false               # the last tick took a step (its result is in the nodes from this tick on)
+var _hist: Array = []            # [[step, { instance id -> Transform3D }], ...], oldest first
 
 func draw_xform(b: Node3D) -> Transform3D:
 	var now := b.global_transform
-	var was = _snap.get(b.get_instance_id())
-	if was == null: return now
-	var f := Engine.get_physics_interpolation_fraction()
-	return Transform3D(Basis((was as Transform3D).basis.get_rotation_quaternion().slerp(now.basis.get_rotation_quaternion(), f)), (was as Transform3D).origin.lerp(now.origin, f))
+	var id := b.get_instance_id()
+	var clock := _steps + _acc + pace * Engine.get_physics_interpolation_fraction() - DRAW_LAG
+	var lo = null
+	var hi = null
+	for h in _hist:                                            # the two kept states either side of the clock
+		if not h[1].has(id): continue
+		if h[0] <= clock: lo = h
+		elif hi == null: hi = h
+	if lo == null and hi == null: return now
+	if lo == null: return hi[1][id]
+	if hi == null: return lo[1][id]
+	var a: Transform3D = lo[1][id]
+	var c: Transform3D = hi[1][id]
+	var f := clampf((clock - lo[0]) / float(hi[0] - lo[0]), 0.0, 1.0)
+	return Transform3D(Basis(a.basis.get_rotation_quaternion().slerp(c.basis.get_rotation_quaternion(), f)), a.origin.lerp(c.origin, f))
+
+func _keep_history() -> void:
+	var x := {}
+	for b in pins:
+		if b and is_instance_valid(b): x[b.get_instance_id()] = b.global_transform
+	if ball and is_instance_valid(ball): x[ball.get_instance_id()] = ball.global_transform
+	_hist.append([_steps, x])
+	while _hist.size() > 6: _hist.pop_front()
 
 func _keep_snapshots() -> void:
 	_snap.clear()
@@ -264,12 +291,15 @@ func _keep_snapshots() -> void:
 		_ball_v = ball.linear_velocity
 
 func _physics_process(dt: float) -> void:
+	if _went: _keep_history()        # the last tick's step has reached the nodes
 	_acc += pace
 	var go := _acc >= 1.0
+	_went = go
 	PhysicsServer3D.space_set_active(_vp.world_3d.space, go)
-	_keep_snapshots()                # on a held tick nothing moves, so the snapshot equals the body and the picture holds still
+	_keep_snapshots()
 	if not go: return
 	_acc -= 1.0
+	_steps += 1
 	t += dt
 	_tick += 1
 	if live and ball:
@@ -314,6 +344,19 @@ func _physics_process(dt: float) -> void:
 	quiet = quiet + dt if still else 0.0
 	if armed and result < 0 and done(): result = read()
 	if record and _tick % 4 == 0: rec.append(_snapshot())
+
+## A recorded frame between two others (positions blended, rotations turned the short way), for smooth slow replays.
+## A body that appears or vanishes between them takes the earlier frame.
+static func blend_frames(a: PackedFloat32Array, b: PackedFloat32Array, f: float) -> PackedFloat32Array:
+	var o := a.duplicate()
+	for i in 11:
+		var k := i * 8
+		if a[k + 7] <= 0.0 or b[k + 7] <= 0.0: continue
+		for j in 3: o[k + j] = lerpf(a[k + j], b[k + j], f)
+		var q := Quaternion(a[k + 3], a[k + 4], a[k + 5], a[k + 6]).slerp(Quaternion(b[k + 3], b[k + 4], b[k + 5], b[k + 6]), f)
+		o[k + 3] = q.x; o[k + 4] = q.y; o[k + 5] = q.z; o[k + 6] = q.w
+	o[88] = lerpf(a[88], b[88], f)
+	return o
 
 func _snapshot() -> PackedFloat32Array:
 	var f := PackedFloat32Array()

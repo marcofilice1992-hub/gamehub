@@ -60,6 +60,7 @@ var _last_state := ""
 var _replay_t := -1.0
 const TIER_NAMES := ["Low", "Medium", "High", "Ultra"]
 var _roll_q := Quaternion.IDENTITY
+const BALL_GRIP := Quaternion(0.0, 0.0, 0.0, 1.0)  # the ball's turn relative to the hand that holds it
 var _replay_last := Vector3.ZERO
 
 ## One mesh in the hall. Nothing casts a shadow unless it is turned on: only the pins, the ball and the sweep bar need to,
@@ -707,7 +708,7 @@ func _process(dt: float) -> void:
 		var bw: Bowler = bowlers[c]
 		ball.visible = true
 		ball.position = bw.ball_at_chest() if st != "swing" else bw.ball_in_hand()
-		ball.quaternion = Quaternion(Vector3.RIGHT, -0.6)
+		ball.quaternion = bw.hand_rot() * BALL_GRIP                # the ball turns with the hand that holds it
 		_roll_q = ball.quaternion
 		_rel_from = ball.position
 	elif RF != null:                                        # replay: place the ball from the recording and roll it by how far it moved
@@ -733,6 +734,9 @@ func _process(dt: float) -> void:
 				var axis := Vector3(-v.z / sp, -m.spin * 0.8, v.x / sp).normalized()            # spin tilts the axis the ball turns on
 				_roll_q = (Quaternion(axis, -sp * dt * ln.pace / Tune.BR * (1.0 + 0.45 * absf(m.spin))) * _roll_q).normalized()   # spin adds revs
 			ball.quaternion = _roll_q
+			if st == "roll" and m.t < Bowler.DOWNSWING + 0.08:   # still turning with the hand until it leaves it
+				var bw: Bowler = bowlers[c]
+				ball.quaternion = (bw.hand_rot() * BALL_GRIP).slerp(_roll_q, smoothstep(Bowler.DOWNSWING * 0.6, Bowler.DOWNSWING + 0.08, m.t))
 	# the sweep bar comes down as the pins are cleared, and lifts as the next ball begins
 	var want := (1.0 if m.t > m.hold - 0.55 else 0.0) if st == "show" else (1.0 if st == "stance" and m.t < 0.35 and m.n > 1 else 0.0)
 	sweep_k += (want - sweep_k) * (1 - exp(-9 * dt))
