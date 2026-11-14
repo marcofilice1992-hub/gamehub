@@ -60,9 +60,10 @@ An RTX 3060 Ti should hold High at 1080p; try Ultra, and use F3 to check.
 | `scripts/match.gd` | The match: turns, swing, release, count, card, roll-offs, heckles, coaching, the practice bot |
 | `scripts/hall.gd` | The 3D hall, pins and ball drawn from the physics, lane screens, neighbours, cameras, graphics tiers |
 | `scripts/fx.gd` | GPU particles: impact dust and chips, strike confetti |
-| `scripts/bowler.gd` | The bowlers: jointed figures with shirts, hair and faces, and their poses and animation |
+| `scripts/bowler.gd` | The bowlers: rigged characters dressed for the alley; clips underneath, the bowling posed over them |
 | `scripts/decor.gd` | The hall around the lanes: approach, carpeted concourse and seating, ball returns, wall panels and posters, pit curtain, dust |
-| `shaders/` | Lane boards and oil, pins, ball, kickback art |
+| `shaders/` | Lane boards and oil, pins, ball, kickback art, the bowlers' clothes and hair |
+| `characters/` | The bowlers' bodies, hair and animation clips (Quaternius, CC0: see below) |
 | `scripts/hud.gd`, `scripts/gx.gd` | Scorecard, panels, meters and callouts, drawn on a 1920×1080 frame |
 | `scripts/pads.gd` | Two seats: controllers, two keyboard halves, the bot; rumble |
 | `scripts/store.gd` | Settings and the head-to-head record, saved to the user folder |
@@ -84,6 +85,23 @@ bot-against-bot matches.
 
 `godot --path godot/tenpin-grudge -- --demo` plays a bot match with nothing saved.
 `-- --shots=DIR --seed=N` plays a quick bot match and saves a screenshot of each stage.
+
+## The bowlers
+
+The bodies and hair are Quaternius's **Universal Base Characters** (male and female, CC0), and the clips are from his
+**Universal Animation Library** 1 and 2 (CC0): <https://quaternius.com>. `characters/LICENSE-Quaternius.txt` has the licence.
+
+- Clothes are painted on by the shader (`shaders/body.gdshader`) from where each vertex sits in the T-pose, so they follow
+  the skinning: a bowling shirt in the player's colour with panels, piping, collar and buttons; trousers; two-tone shoes.
+- Clips play for the idles and reactions: waiting, folded arms when the other player strikes, a nod and thumbs up for a
+  spare, hands round the mouth for a heckle, a dance for the match winner and a head shake for the loser. The neighbours
+  wait on their phones, with a drink, or chatting.
+- No clip bowls, so the hold, approach, slide, release and follow-through are posed in code (the `p_*` functions) and laid
+  over the clip bone by bone. A mask picks which bones the pose owns: all of them while bowling, the upper body when
+  holding the ball (the legs keep the idle's weight shifts), none for a plain clip.
+- `characters/clips.res` holds only the 20 clips used. To rebuild it from the two library files:
+  `godot --headless --path godot/tenpin-grudge res://tools/make_clips.tscn -- --src=FOLDER`.
+- `tools/pose_sheet.tscn` renders every pose and clip on both bodies to one image, for checking by eye.
 
 ## Physics, as measured
 

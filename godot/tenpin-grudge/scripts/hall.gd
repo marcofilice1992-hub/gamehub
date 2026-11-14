@@ -36,10 +36,11 @@ const START_D := -1.0                 # where a bowler stands to start their app
 const SLIDE_D := -0.5                 # where the slide ends, just behind the foul line
 const WAIT := Vector3(-1.45, 0.0, 2.9) # the waiting player, by the ball return on the left
 const LOOKS := [
-	{ "skin": "#F2D0B5", "shirt": "#6EA2FF", "panel": "#16234A", "trousers": "#2A2D3A", "shoes": "#2F6BFF", "hair": "quiff", "hair_col": "#3B2A20", "height": 1.03 },
-	{ "skin": "#D9A57E", "shirt": "#F2A93B", "panel": "#3D2410", "trousers": "#2B2630", "shoes": "#E24A3B", "hair": "ponytail", "hair_col": "#6B2E17", "height": 0.97 },
+	{ "body": "m", "skin": "#F2D0B5", "shirt": "#6EA2FF", "panel": "#16234A", "trousers": "#2A2D3A", "shoes": "#2F6BFF", "hair": "parted", "hair_col": "#3B2A20", "height": 1.0 },
+	{ "body": "f", "skin": "#D9A57E", "shirt": "#F2A93B", "panel": "#3D2410", "trousers": "#2B2630", "shoes": "#E24A3B", "hair": "long", "hair_col": "#6B2E17", "height": 0.98 },
 ]
-const NB_HAIR := ["bob", "afro", "beanie", "buzz", "bun", "quiff"]
+const NB_HAIR := ["long", "beard", "buns", "buzzed", "buzzed_f", "parted_beard"]
+const NB_IDLE := ["Idle_TalkingPhone_Loop", "Consume", "Idle_Loop", "Idle_Talking_Loop", "Idle_FoldArms_Loop", "Idle_Loop"]   # what each neighbour does while they wait
 var decor: Decor
 var boards := {}                      # lane offset -> { vp, draw, key }
 var racks: MultiMeshInstance3D
@@ -389,9 +390,10 @@ func build(match_node: Match) -> void:
 		add_child(nbw)
 		nbw.build({ "skin": Bowler.SKINS[(li * 2 + 1) % Bowler.SKINS.size()], "shirt": NEIGHBOUR_COLS[li % NEIGHBOUR_COLS.size()], "panel": "#15131F",
 			"trousers": ["#2A2D3A", "#3A3328", "#1E2733"][li % 3], "shoes": ["#E24A3B", "#2F6BFF", "#20C997"][li % 3], "hair": NB_HAIR[li % NB_HAIR.size()],
-			"hair_col": ["#2B1D14", "#C9A15A", "#121212", "#6B2E17", "#3B2A20", "#8A8A8A"][li % 6], "height": 0.94 + 0.1 * R.randf() }, false)
+			"hair_col": ["#2B1D14", "#C9A15A", "#121212", "#6B2E17", "#3B2A20", "#8A8A8A"][li % 6], "height": 0.95 + 0.07 * R.randf() }, false)
 		nbw.position = Vector3(n * PITCH - 0.2, 0, 4.5)
 		nbw.set_meta("r", -1.0)
+		nbw.set_meta("idle", NB_IDLE[li % NB_IDLE.size()])
 		nb_bowlers[n] = nbw
 		li += 1
 
@@ -829,7 +831,7 @@ func _bowlers(dt: float) -> void:
 		"intro", "stance":
 			me.position = Vector3(bx, 0, -START_D)
 			me.rotation.y = 0
-			me.act(me.p_hold(tt), dt, 10.0)
+			me.act(me.p_hold(tt), dt, 10.0, 0.0, false, "Idle_Loop", "upper")      # the legs keep the idle's weight shifts
 		"swing":
 			var k := clampf(m.sw.t / 0.85, 0.0, 1.0)
 			var e := k * k * (3 - 2 * k)
@@ -844,26 +846,26 @@ func _bowlers(dt: float) -> void:
 		"show", "replay":
 			var kind := _show_kind
 			if kind == "big": me.act(me.p_cheer(tt, true), dt, 10.0, 0.0 if red else absf(sin(tt * 7.0)) * 0.12, true)
-			elif kind == "good": me.act(me.p_cheer(tt, false), dt, 10.0, 0.0, true)
+			elif kind == "good": me.play("Yes", dt)                              # a nod and a thumbs up
 			elif kind == "bad": me.act(me.p_slump(tt), dt, 6.0)
-			else: me.act(me.p_watch(tt), dt, 6.0)
+			else: me.play("Idle_Loop", dt)
 		"over", "done":
 			var w := m.won
-			if w < 0: me.act(me.p_watch(tt), dt, 6.0)
+			if w < 0: me.play("Idle_Loop", dt)
 			else:
 				var winner: Bowler = bowlers[m.P[w].c]
 				var loser: Bowler = bowlers[1 - m.P[w].c]
-				winner.act(winner.p_cheer(winner.clock(), true), dt, 10.0, 0.0 if red else absf(sin(winner.clock() * 7.0)) * 0.12, true)
-				loser.act(loser.p_slump(loser.clock()), dt, 6.0)
+				winner.play("Dance_Loop", dt)
+				loser.play("Idle_No_Loop", dt)
 				return
 	# the one waiting: by the ball return, half turned to the lane
 	you.position = WAIT
 	you.rotation.y = -0.45
 	var hk := m.heckle
-	if not hk.is_empty() and hk.c == 1 - c: you.act(you.p_heckle(you.clock()), dt, 14.0, 0.0, true)
-	elif (st == "show" or st == "replay") and _show_kind == "big": you.act(you.p_sulk(you.clock()), dt, 6.0)
-	elif (st == "show" or st == "replay") and _show_kind == "bad": you.act(you.p_clap(you.clock()), dt, 10.0, 0.0, true)
-	else: you.act(you.p_idle(you.clock()), dt, 6.0)
+	if not hk.is_empty() and hk.c == 1 - c: you.play("Idle_Rail_Call", dt)                       # hands round the mouth, calling out
+	elif (st == "show" or st == "replay") and _show_kind == "big": you.play("Idle_FoldArms_Loop", dt)
+	elif (st == "show" or st == "replay") and _show_kind == "bad": you.act(you.p_clap(you.clock()), dt, 10.0, 0.0, true, "Idle_Loop", "upper")
+	else: you.play("Idle_Loop", dt)
 
 ## The neighbours: a quick approach as their ball is about to go, a release, then back to waiting.
 func _neighbour_bowlers(dt: float) -> void:
@@ -882,7 +884,7 @@ func _neighbour_bowlers(dt: float) -> void:
 		else:
 			if r >= 3.5: bw.set_meta("r", -1.0)
 			bw.position = Vector3(x, 0, 4.5)                     # waiting back on the concourse, out of the bowling camera's way
-			bw.act(bw.p_idle(bw.clock()), dt, 4.0)
+			bw.play(bw.get_meta("idle"), dt)
 
 ## Graphics tiers, tuned for a mid-range card (an RTX 3060 Ti runs High at 1080p with room to spare):
 ## Low     FSR 1 at 67% scale, FXAA, no screen-space effects, hard shadows, still neighbours
