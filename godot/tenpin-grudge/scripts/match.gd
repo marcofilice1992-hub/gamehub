@@ -307,7 +307,7 @@ func release(drift: float) -> void:
 func score(count: int) -> void:
 	var p := cur
 	var left := lane.up.size()
-	if quick: print("ball %d: %d down" % [n, count])
+	if quick: print("ball %d: %d down, head-pin offset %.1f cm" % [n, count, lane.hit_x * 100])
 	var text := ""
 	var sub := ""
 	var big := false

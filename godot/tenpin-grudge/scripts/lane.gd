@@ -35,27 +35,40 @@ var _spots := Tune.spots()
 var _lane_mat := PhysicsMaterial.new()
 var _pin_mat := PhysicsMaterial.new()
 var _ball_mat := PhysicsMaterial.new()
+var _kick_mat := PhysicsMaterial.new()
 var _belly: ConvexPolygonShape3D
 var _head := SphereShape3D.new()
 var _ball_shape := SphereShape3D.new()
 var _vp: SubViewport                 # holds the bodies in a physics world of their own
 var _statics: Array = []
 
+## The physical constants, from Tune. Tests may swap in other values (tests/carry.tscn) before racking.
+var cfg := {
+	"pin_fric": Tune.PIN_FRICTION, "pin_bounce": Tune.PIN_BOUNCE, "ball_fric": Tune.BALL_FRICTION, "ball_bounce": Tune.BALL_BOUNCE,
+	"deck_fric": Tune.DECK_FRICTION, "deck_bounce": Tune.DECK_BOUNCE, "lin_damp": Tune.PIN_AIR_DAMP, "ang_damp": Tune.PIN_SPIN_DAMP,
+	"jitter": Tune.RACK_JITTER, "drive": Tune.DRIVE, "ylock": Tune.BALL_Y_LOCK, "kick_bounce": Tune.KICKBACK_BOUNCE,
+}
+
 func _ready() -> void:
-	_lane_mat.friction = Tune.DECK_FRICTION; _lane_mat.bounce = 0.3
-	_pin_mat.friction = Tune.PIN_FRICTION; _pin_mat.bounce = Tune.PIN_BOUNCE
-	_ball_mat.friction = 0.0; _ball_mat.bounce = 0.3
 	_head.radius = 0.033
 	_ball_shape.radius = Tune.BR
-	# One pin's body: a convex belly (narrow base, upright sides where the ball meets it, narrow neck) and a sphere for the head.
+	# One pin's body: a convex belly (base, the widest part where the ball meets it, the neck) and a sphere for the head.
+	# Measured off a regulation pin; 16 sides, so a fallen pin rolls rather than flopping from flat to flat.
 	var pts := PackedVector3Array()
-	for ring in [[0.03, 0.0], [0.06, 0.088], [0.06, 0.142], [0.024, 0.27]]:
-		for j in 8:
-			var a := TAU * j / 8.0
+	for ring in [[0.0258, 0.0], [0.046, 0.05], [0.0605, 0.114], [0.057, 0.16], [0.032, 0.236], [0.0235, 0.27]]:
+		for j in 16:
+			var a := TAU * j / 16.0
 			pts.append(Vector3(ring[0] * cos(a), ring[1] - Tune.COG, ring[0] * sin(a)))
 	_belly = ConvexPolygonShape3D.new()
 	_belly.points = pts
+	_apply_cfg()
 	_fresh_world()
+
+func _apply_cfg() -> void:
+	_lane_mat.friction = cfg.deck_fric; _lane_mat.bounce = cfg.deck_bounce
+	_pin_mat.friction = cfg.pin_fric; _pin_mat.bounce = cfg.pin_bounce
+	_ball_mat.friction = cfg.ball_fric; _ball_mat.bounce = cfg.ball_bounce
+	_kick_mat.friction = 0.3; _kick_mat.bounce = cfg.kick_bounce
 
 ## Jolt is deterministic for the same bodies created in the same order in a new world, but not across a world's history
 ## (freed body ids, broadphase layout). So every rack and every sweep gets a brand-new physics world: the same shot
@@ -93,7 +106,7 @@ func _build_static() -> void:
 	_box(Vector3(Tune.LW * 2, 0.5, len), Vector3(0, -0.25, -(D - 1.5) / 2), _lane_mat)                             # the boards, top at y = 0
 	for s in [-1, 1]:
 		_box(Vector3(Tune.GW, 0.2, len), Vector3(s * (Tune.LW + Tune.GW / 2), -0.148, -(D - 1.5) / 2), _lane_mat)   # gutter floor, 48 mm down
-		_box(Vector3(0.1, 1.2, Tune.PIT + 1.5), Vector3(s * (far + 0.05), 0.4, -(Tune.PIT - 1.5) / 2), _lane_mat)   # outer wall and kickback
+		_box(Vector3(0.1, 1.2, Tune.PIT + 1.5), Vector3(s * (far + 0.05), 0.4, -(Tune.PIT - 1.5) / 2), _kick_mat)   # outer wall and kickback
 	_box(Vector3(far * 2, 0.2, Tune.PIT - D), Vector3(0, -0.45, -(D + Tune.PIT) / 2), _lane_mat)                     # pit floor
 	_box(Vector3(far * 2, 1.4, 0.1), Vector3(0, 0.2, -(Tune.PIT + 0.05)), _lane_mat)                                 # pit cushion
 
@@ -102,12 +115,14 @@ func _pin(i: int, x: float, d: float) -> RigidBody3D:
 	b.mass = Tune.PM
 	b.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	b.center_of_mass = Vector3.ZERO
-	b.inertia = Vector3(0.02, 0.0016, 0.02)          # a real pin's, not its bounding box's
+	b.inertia = Vector3(0.0155, 0.0018, 0.0155)      # a regulation pin's, about its centre of gravity
 	b.physics_material_override = _pin_mat
 	b.collision_layer = L_PIN
 	b.collision_mask = L_STATIC | L_PIN | L_BALL
-	b.linear_damp = 0.05
-	b.angular_damp = get_meta("spin_damp", Tune.PIN_SPIN_DAMP)
+	b.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE   # not the project default, which would slow pins in flight
+	b.angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	b.linear_damp = cfg.lin_damp
+	b.angular_damp = cfg.ang_damp
 	b.contact_monitor = true
 	b.max_contacts_reported = 4
 	var c1 := CollisionShape3D.new(); c1.shape = _belly; b.add_child(c1)
@@ -128,6 +143,7 @@ func _remove(b: Node) -> void:
 func rack(which := []) -> void:
 	drop()
 	armed = false; result = -1
+	_apply_cfg()
 	for b in pins: _remove(b)
 	_fresh_world()
 	up = which.duplicate() if not which.is_empty() else range(10)
@@ -135,7 +151,7 @@ func rack(which := []) -> void:
 	for i in 10:
 		if up.has(i):
 			var s: Vector2 = _spots[i]
-			pins.append(_pin(i, s.x + (rng.randf() - 0.5) * 2 * Tune.RACK_JITTER, s.y + (rng.randf() - 0.5) * 2 * Tune.RACK_JITTER))
+			pins.append(_pin(i, s.x + (rng.randf() - 0.5) * 2 * cfg.jitter, s.y + (rng.randf() - 0.5) * 2 * cfg.jitter))
 		else:
 			pins.append(null)
 
@@ -151,7 +167,7 @@ func tidy() -> void:
 	for i in 10:
 		pins.append(_pin(i, keep[i].x, -keep[i].z) if keep.has(i) else null)
 
-func bowl(x: float, ang_deg: float, v: float, with_bumpers: bool, ball_def: Dictionary) -> void:
+func bowl(x: float, ang_deg: float, v: float, with_bumpers: bool, ball_def: Dictionary, d0 := Tune.START) -> void:
 	drop()
 	var b := RigidBody3D.new()
 	b.mass = ball_def.kg
@@ -159,7 +175,7 @@ func bowl(x: float, ang_deg: float, v: float, with_bumpers: bool, ball_def: Dict
 	b.physics_material_override = _ball_mat
 	b.collision_layer = L_BALL
 	b.collision_mask = L_STATIC | L_PIN
-	b.axis_lock_linear_y = true      # a bowling ball ploughs through the pins; it does not climb them
+	b.axis_lock_linear_y = true      # on the boards the ball rolls flat; whether it stays locked in the pins is cfg.ylock
 	b.axis_lock_angular_x = true; b.axis_lock_angular_y = true; b.axis_lock_angular_z = true
 	b.continuous_cd = true
 	b.can_sleep = false
@@ -169,7 +185,7 @@ func bowl(x: float, ang_deg: float, v: float, with_bumpers: bool, ball_def: Dict
 	b.max_contacts_reported = 8
 	var c := CollisionShape3D.new(); c.shape = _ball_shape; b.add_child(c)
 	var a := deg_to_rad(ang_deg)
-	b.position = Vector3(x, Tune.BR, -Tune.START)
+	b.position = Vector3(x, Tune.BR, -d0)
 	b.linear_velocity = Vector3(v * sin(a), 0, -v * cos(a))
 	_vp.add_child(b)
 	b.body_entered.connect(_on_ball_contact)
@@ -192,7 +208,12 @@ func _on_ball_contact(body: Node) -> void:
 	if not hit:
 		hit = true
 		hit_t = t
-		hit_x = ball.position.x
+		# where the ball would have crossed the head pin's row, from its line just before contact: the measure bowlers
+		# (and the USBC) use for "in the pocket". Taking the ball's position at contact would read a 3-pin-first hit as light.
+		var was: Transform3D = _snap.get(ball.get_instance_id(), ball.global_transform)
+		var d0 := -was.origin.z
+		var vd := maxf(0.5, -_ball_v.z)
+		hit_x = was.origin.x + _ball_v.x / vd * (Tune.HEAD - d0)
 	clacks.append(ball.linear_velocity.length())
 
 func _on_pin_contact(body: Node, me: RigidBody3D) -> void:
@@ -224,7 +245,8 @@ var _acc := 0.0
 ## Where to draw a body this frame. Physics ticks 240 times a second and the screen refreshes at its own rate (60, 144, 165...),
 ## so drawing bodies where the last tick left them would move them in uneven steps. Each tick keeps where every body was
 ## before the step; drawing blends from there to where it is now by how far the frame is into the next tick.
-var _snap := {}                  # instance id -> Transform3D before the latest step
+var _snap := {}
+var _ball_v := Vector3.ZERO      # the ball's velocity before the latest step                  # instance id -> Transform3D before the latest step
 
 func draw_xform(b: Node3D) -> Transform3D:
 	var now := b.global_transform
@@ -237,7 +259,9 @@ func _keep_snapshots() -> void:
 	_snap.clear()
 	for b in pins:
 		if b and is_instance_valid(b): _snap[b.get_instance_id()] = b.global_transform
-	if ball and is_instance_valid(ball): _snap[ball.get_instance_id()] = ball.global_transform
+	if ball and is_instance_valid(ball):
+		_snap[ball.get_instance_id()] = ball.global_transform
+		_ball_v = ball.linear_velocity
 
 func _physics_process(dt: float) -> void:
 	_acc += pace
@@ -252,7 +276,7 @@ func _physics_process(dt: float) -> void:
 		var p := ball.position
 		var v := ball.linear_velocity
 		var d := -p.z
-		if d > Tune.DECK + 0.03:
+		if d > Tune.DECK + 0.03 or (hit and not cfg.ylock):
 			ball.axis_lock_linear_y = false                     # off the end of the deck and into the pit
 		if p.y < -0.25 or d > Tune.PIT - 0.25:
 			drop()
@@ -275,6 +299,8 @@ func _physics_process(dt: float) -> void:
 					v.x -= v.x / sp * dv
 					v.z -= v.z / sp * dv
 				v.x += spin * g * hook_k * dt
+			elif d < Tune.DECK and hit:                              # the ball's roll keeps driving it through the pins: a hook ball holds its line
+				v.x += spin * hook_k * cfg.drive * dt
 			ball.linear_velocity = v
 			slow = slow + dt if v.length_squared() < 0.04 else 0.0
 			if slow > 1.0: drop()

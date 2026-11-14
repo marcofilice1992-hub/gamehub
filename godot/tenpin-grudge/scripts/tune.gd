@@ -30,13 +30,23 @@ const TIRE_RATE := 0.2       # power lost per second after that
 const DRIFT := 1.5           # degrees off the aim line at full sideways push on release
 const HOOK_STEPS := [-1.0, -0.6, -0.3, 0.0, 0.3, 0.6, 1.0]
 const HOOK_NAMES := ["Strong left", "Medium left", "Light left", "None", "Light right", "Medium right", "Strong right"]
-const PIN_FRICTION := 0.3   # pin on pin and pin on ball. Calibrated with tests/calib.tscn: an exact pocket hit strikes every time; bot first balls strike about 40% at assist 0, 72% at assist 2
-const PIN_BOUNCE := 0.2     # how lively pins are off each other
+# Pins and ball. Calibrated with tests/sweep.tscn against the USBC's free-fall pinsetter results (Sept 2021 report):
+# strikes peak above 90% at 6.5-8 cm right of the head pin, and averaged over the pocket they come out at 35, 46, 56
+# and 58% for 0, 2, 4 and 6 degrees of entry angle (USBC: 36, 41, 53, 59). Light hits leave the 10 pin, high hits the 4 and 7.
+const PIN_FRICTION := 0.1   # pin on pin: lacquered, slippery
+const PIN_BOUNCE := 0.2     # pin on pin
+const BALL_FRICTION := 0.25 # ball on pin: the ball's cover grips the pins it meets
+const BALL_BOUNCE := 0.5    # ball on pin
 const PIN_SPIN_DAMP := 0.8  # how quickly a tumbling pin slows
-const DECK_FRICTION := 0.45 # pins sliding on the deck
+const PIN_AIR_DAMP := 0.05  # how quickly a moving pin slows (nearly free in flight)
+const DECK_FRICTION := 0.2  # pins sliding on the deck
+const DECK_BOUNCE := 0.3
+const DRIVE := 0.4          # how much of the hook keeps acting while the ball is in the pins: a hook ball holds its line
+const KICKBACK_BOUNCE := 0.3 # the side walls by the deck
+const BALL_Y_LOCK := true   # keep the ball on the deck through the pins (it cannot ride up over them)
 const BOT_STAND_NOISE := 0.04 # metres: how far off its chosen spot the practice bot stands (one standard deviation)
 const BOT_DRIFT_NOISE := 0.4  # how crooked its release is, as a fraction of a full sideways push
-const RACK_JITTER := 0.0005  # metres each pin may sit off its spot
+const RACK_JITTER := 0.004   # metres each pin may sit off its spot, as a real pinsetter's do: the same shot does not always carry
 const SETTLE_QUIET := 0.35   # seconds every standing pin must be still before the count
 const SETTLE_MAX := 3.2      # seconds after first contact before the count is taken regardless
 const SHOW_NORMAL := 1.25    # seconds a result stays up

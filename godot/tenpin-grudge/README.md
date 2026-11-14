@@ -78,17 +78,27 @@ godot --headless --path godot/tenpin-grudge res://tests/run.tscn --fixed-fps 240
 ```
 
 These cover scoring, pinfall (pocket carry, hook against straight, repeatability, gutters, bumpers) and eight full
-bot-against-bot matches. `tests/calib.tscn` reruns the pin calibration.
+bot-against-bot matches.
 
 `godot --path godot/tenpin-grudge -- --demo` plays a bot match with nothing saved.
 `-- --shots=DIR --seed=N` plays a quick bot match and saves a screenshot of each stage.
 
-## Balance, as measured
+## Physics, as measured
 
-- An exact pocket hit (6.5 cm right of the head pin) strikes every time, straight or hooked. Hits off the pocket leave pins.
-  Same shot on the same rack, same count, every time.
-- Practice bot, 8 matches: averages 136 at assist 0 and 200 at assist 2 (the browser version: 138 and 178).
-- Pin friction, bounce and spin damping are in `tune.gd`; `tests/calib.tscn` measures them.
+`tests/carry.tscn` rolls balls into a full rack at set entry angles and offsets from the head pin; `tests/sweep.tscn` scores
+settings against the USBC's free-fall pinsetter results (Sept 2021 string-pinsetter report).
+
+| Entry angle | Strikes over 0-12 cm from the head pin | USBC free-fall |
+|---|---|---|
+| 0° | 35% | 36% |
+| 2° | 46% | 41% |
+| 4° | 56% | 53% |
+| 6° | 58% | 59% |
+
+- Strikes peak at 6.5-8 cm right of the head pin (the USBC's 2.5-3.0 in), at 85-100% from 2° up. Light hits leave the 10 pin; high hits the 4 and 7.
+- A hook ball holds its line through the pins (its roll keeps driving it); a straight ball is pushed off it.
+- Pins sit up to 4 mm off their spots, as with a real pinsetter, so the same shot does not always carry. A given rack and shot always count the same.
+- Practice bot, 8 matches: averages 132 at assist 0 and 204 at assist 2 (the browser version: 138 and 178).
 
 ## Export
 
