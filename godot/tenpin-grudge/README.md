@@ -107,6 +107,13 @@ The bodies and hair are Quaternius's **Universal Base Characters** (male and fem
 - No clip bowls, so the hold, approach, slide, release and follow-through are posed in code (the `p_*` functions) and laid
   over the clip bone by bone. A mask picks which bones the pose owns: all of them while bowling, the upper body when
   holding the ball (the legs keep the idle's weight shifts), none for a plain clip.
+- Every joint is driven by a critically damped spring towards its pose, solved exactly each frame, so limbs speed up
+  and settle smoothly at any frame rate. The approach is a smooth function of the swing: one continuous leg phase,
+  a keyed arm curve with no overshoot, hips and shoulders turning with the backswing, the hips dipping at each
+  footfall. On release the arm swings down from wherever the backswing topped out (0.13 s) with the ball still in
+  the hand, then the ball blends onto its rolling path (the physics release is not delayed).
+- `tools/pose_sheet.tscn -- --film=DIR` films a whole turn side on and logs hand, hip and foot tracks, for measuring
+  smoothness (peak acceleration and jerk).
 - `characters/clips.res` holds only the 20 clips used. To rebuild it from the two library files:
   `godot --headless --path godot/tenpin-grudge res://tools/make_clips.tscn -- --src=FOLDER`.
 - `tools/pose_sheet.tscn` renders every pose and clip on both bodies to one image, for checking by eye.

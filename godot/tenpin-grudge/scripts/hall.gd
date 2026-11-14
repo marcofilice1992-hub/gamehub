@@ -724,8 +724,9 @@ func _process(dt: float) -> void:
 		ball.visible = b != null and is_instance_valid(b)
 		if ball.visible:
 			ball.position = ln.draw_xform(b).origin
-			if st == "roll" and m.t < 0.09:                     # the first moment out of the hand: blend from the hand to the ball's path
-				ball.position = _rel_from.lerp(ball.position, smoothstep(0.0, 0.09, m.t))
+			if st == "roll" and m.t < Bowler.DOWNSWING + 0.08:   # the first moment: in the hand on the downswing, then onto its path
+				var bw: Bowler = bowlers[c]
+				ball.position = bw.ball_in_hand().lerp(ball.position, smoothstep(Bowler.DOWNSWING * 0.6, Bowler.DOWNSWING + 0.08, m.t))
 			var v: Vector3 = b.linear_velocity
 			var sp := Vector2(v.x, v.z).length()
 			if sp > 0.05:
@@ -838,11 +839,11 @@ func _bowlers(dt: float) -> void:
 			me.position = Vector3(bx, 0, -lerpf(START_D, SLIDE_D, e))
 			var pw := (m.swing_power() - 0.55) / 0.45
 			var tired := clampf((m.sw.t - Tune.TIRE_AFTER) * 0.6, 0.0, 1.0)
-			var bob := -0.035 * absf(sin(k * 3.0 * PI))
+			var bob := Bowler.step_bob(k)
 			me.act(me.p_approach(k, pw, tired, m.sw.twist), dt, 30.0, -0.17 * smoothstep(0.7, 1.0, k) + bob)
 		"roll":
 			me.position = Vector3(bx, 0, -SLIDE_D)
-			me.act(me.p_release(m.t, m.spin), dt, 40.0 if m.t < 0.1 else 10.0, -0.17 * (1.0 - smoothstep(1.2, 1.9, m.t)))
+			me.act(me.p_release(m.t, m.spin), dt, 40.0 if m.t < 0.4 else 10.0, -0.17 * (1.0 - smoothstep(1.2, 2.0, m.t)))
 		"show", "replay":
 			var kind := _show_kind
 			if kind == "big": me.act(me.p_cheer(tt, true), dt, 10.0, 0.0 if red else absf(sin(tt * 7.0)) * 0.12, true)
@@ -880,7 +881,7 @@ func _neighbour_bowlers(dt: float) -> void:
 		elif r >= 0.0 and r < 3.5:
 			bw.set_meta("r", r + dt)
 			bw.position = Vector3(x, 0, -SLIDE_D)
-			bw.act(bw.p_release(r), dt, 30.0 if r < 0.1 else 8.0, -0.17 * (1.0 - smoothstep(1.2, 1.9, r)))
+			bw.act(bw.p_release(r), dt, 30.0 if r < 0.4 else 8.0, -0.17 * (1.0 - smoothstep(1.2, 2.0, r)))
 		else:
 			if r >= 3.5: bw.set_meta("r", -1.0)
 			bw.position = Vector3(x, 0, 4.5)                     # waiting back on the concourse, out of the bowling camera's way

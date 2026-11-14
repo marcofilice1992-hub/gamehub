@@ -46,6 +46,11 @@ const MANNEQUIN_PELVIS := Vector3(0.0, 0.0501, 0.9167)   # the animation library
 var look := {}
 var pose := {}                  # current joint rotations in degrees (blended towards targets each frame)
 var lift := 0.0                 # hips height offset
+var _pv := {}                   # joint -> angular velocity (degrees a second) of the springs that drive the pose
+var _lv := 0.0                  # the hips' vertical velocity
+var _rel_top := -80.0           # where the arm was when the ball was let go (the top of the backswing)
+var _rel_last := INF
+const DOWNSWING := 0.13         # seconds from the top of the backswing to the bottom, after the release input
 var body: Node3D
 var sk: Skeleton3D
 var ap: AnimationPlayer
@@ -304,48 +309,92 @@ func p_hold(t: float) -> Dictionary:
 	_feet_flat(p)
 	return p
 
-## The approach, driven by the swing: three steps to the foul line while the arm swings back to a height that shows
-## the power (k = 0..1 through the approach; pw = 0..1 of the power range).
+## A smooth curve through keys [[x, y], ...] (monotone cubic: no overshoot between keys, no kinks at them).
+static func curve(keys: Array, x: float) -> float:
+	var n := keys.size()
+	if x <= keys[0][0]: return keys[0][1]
+	if x >= keys[n - 1][0]: return keys[n - 1][1]
+	var i := 0
+	while x > keys[i + 1][0]: i += 1
+	var slope := func(j: int) -> float:                     # Fritsch-Carlson tangent at key j
+		if j <= 0 or j >= n - 1: return 0.0
+		var d0: float = (keys[j][1] - keys[j - 1][1]) / (keys[j][0] - keys[j - 1][0])
+		var d1: float = (keys[j + 1][1] - keys[j][1]) / (keys[j + 1][0] - keys[j][0])
+		if d0 * d1 <= 0.0: return 0.0
+		return 2.0 / (1.0 / d0 + 1.0 / d1)
+	var x0: float = keys[i][0]; var x1: float = keys[i + 1][0]
+	var y0: float = keys[i][1]; var y1: float = keys[i + 1][1]
+	var h := x1 - x0
+	var t := (x - x0) / h
+	var m0: float = slope.call(i) * h
+	var m1: float = slope.call(i + 1) * h
+	var t2 := t * t; var t3 := t2 * t
+	return (2 * t3 - 3 * t2 + 1) * y0 + (t3 - 2 * t2 + t) * m0 + (-2 * t3 + 3 * t2) * y1 + (t3 - t2) * m1
+
+## The approach, driven by the swing: three steps and a slide to the foul line while the arm swings back to a height
+## that shows the power (k = 0..1 through the approach; pw = 0..1 of the power range). Everything is a smooth
+## function of k, so nothing jumps: the legs swing on one continuous phase (left, right, left into the slide), the
+## swing arm follows a keyed curve (push away, down past the hip, up into the backswing), and the hips and shoulders
+## open as the arm goes back, with the head turned back to keep the eyes on the target.
 func p_approach(k: float, pw: float, tired: float, turn := 0.0) -> Dictionary:
 	var p := _blank()
 	var e := k * k * (3 - 2 * k)
-	var steps := k * 3.0
-	var ph := fmod(steps, 1.0)
-	var lead := int(steps) % 2                                # which leg is stepping
-	var swing := sin(ph * PI)
-	var a := 30.0 * cos(ph * PI)                               # stepping leg swings from back to front
-	var hl := -a if lead == 0 else a
-	p.hip_l = Vector3(hl * (1 - e * 0.4), 0, -2); p.hip_r = Vector3(-hl * (1 - e * 0.4), 0, 2)
-	p.kn_l = Vector3(-(28 * swing if lead == 0 else 6), 0, 0)
-	p.kn_r = Vector3(-(28 * swing if lead == 1 else 6), 0, 0)
-	# the slide: left leg forward and bent, right leg trailing behind
-	var sl := smoothstep(0.7, 1.0, k)
+	var ph := k * 3.0 * PI                                      # leg phase: 0..pi left steps, pi..2pi right, 2pi..3pi left
+	var amp := 30.0 * (1.0 - 0.35 * e)
+	var hl := -amp * cos(ph) * smoothstep(0.0, 0.17, k)        # (from standing: the first step starts with the feet together)
+	p.hip_l = Vector3(hl, 0, -2); p.hip_r = Vector3(-hl, 0, 2)
+	var sw_l := pow(maxf(0.0, sin(ph)), 2.0)                    # the swinging leg bends at the knee (eased in and out)
+	var sw_r := pow(maxf(0.0, -sin(ph)), 2.0)
+	p.kn_l = Vector3(-(6.0 + 30.0 * sw_l), 0, 0)
+	p.kn_r = Vector3(-(6.0 + 30.0 * sw_r), 0, 0)
+	# the slide: left leg forward and bent, right leg trailing behind and turned out
+	var sl := smoothstep(0.62, 1.0, k)
 	p.hip_l = p.hip_l.lerp(Vector3(48, 0, -4), sl); p.kn_l = p.kn_l.lerp(Vector3(-72, 0, 0), sl)
 	p.hip_r = p.hip_r.lerp(Vector3(-38, 12, 10), sl); p.kn_r = p.kn_r.lerp(Vector3(-28, 0, 0), sl)
-	p.spine = Vector3(-8 - 22 * e, 0, 0)
-	p.head = Vector3(14 + 14 * e, 0, 0)
-	# arm: push away, drop, then back to the top of the backswing
+	# the swing arm
 	var top := -(55.0 + 55.0 * pw) + tired * 25.0
-	var arm := 0.0
-	if k < 0.25: arm = lerpf(35.0, 45.0, k / 0.25)
-	elif k < 0.5: arm = lerpf(45.0, 0.0, (k - 0.25) / 0.25)
-	else: arm = lerpf(0.0, top, smoothstep(0.5, 0.9, k))
-	p.sh_r = Vector3(arm, 0, 4)
-	p.el_r = Vector3(lerpf(70.0, 4.0, smoothstep(0.0, 0.4, k)), turn * 70.0, 0)             # the wrist turned for spin
-	p.sh_l = Vector3(lerpf(30.0, 18.0, e), 0, lerpf(18.0, -62.0, e))                   # the balance arm opens out
-	p.el_l = Vector3(lerpf(100.0, 20.0, e), 0, 0)
+	var arm := curve([[0.0, 32.0], [0.18, 48.0], [0.42, 6.0], [0.64, top * 0.55], [0.9, top], [1.0, top]], k)
+	var open := clampf(-arm / 110.0, 0.0, 1.0)                 # how far round the shoulders turn with the backswing
+	p.sh_r = Vector3(arm, 0, 4.0 + 5.0 * open)
+	p.el_r = Vector3(lerpf(95.0, 4.0, smoothstep(0.0, 0.35, k)), turn * 70.0 * smoothstep(0.3, 0.8, k), 0)   # the wrist turned for spin
+	# the body: lean into the slide, tilt to the ball side, turn with the swing; the head stays on the target
+	p.pelvis = Vector3(0, -5.0 * open, 0)
+	p.spine = Vector3(-8.0 - 22.0 * e, -13.0 * open, -7.0 * sl)
+	p.head = Vector3(14.0 + 14.0 * e, 15.0 * open, 5.0 * sl)
+	# the balance arm opens out late, and swings a little against the ball arm
+	var bal := smoothstep(0.3, 0.95, k)
+	p.sh_l = Vector3(lerpf(30.0, 18.0, bal) + 10.0 * open, 0, lerpf(18.0, -62.0, bal))
+	p.el_l = Vector3(lerpf(100.0, 20.0, bal), 0, 0)
 	_feet_flat(p)
 	p.an_r = Vector3(-20 * sl + p.an_r.x * (1 - sl), 0, 0)
 	return p
 
-## The release and follow-through, r seconds after letting go.
+## How far the hips dip with each step of the approach (k = 0..1): lowest as each foot lands, highest as the body
+## passes over the standing leg, eased in from the stance and out into the slide.
+static func step_bob(k: float) -> float:
+	return -0.03 * (0.5 + 0.5 * cos(k * 6.0 * PI)) * smoothstep(0.0, 0.12, k) * (1.0 - smoothstep(0.78, 1.0, k))   # (the slide takes over)
+
+## The release and follow-through, r seconds after letting go: the arm keeps going up and slows (it was moving
+## fastest at the bottom), the shoulders turn through square, the body holds the slide a moment, then stands to watch.
 func p_release(r: float, spin := 0.0) -> Dictionary:
+	if r < _rel_last: _rel_top = minf(pose.sh_r.x, 0.0)         # a new release: start the downswing from where the arm is
+	_rel_last = r
 	var p := p_approach(1.0, 0.6, 0.0)
-	var f := smoothstep(0.0, 0.45, r)
-	p.sh_r = Vector3(lerpf(15.0, 150.0, f), 0, lerpf(2.0, -12.0, f))
-	p.el_r = Vector3(lerpf(4.0, 35.0, f), spin * 75.0 * (1.0 - 0.5 * f), 0)            # the hand comes up the side of the ball: a handshake for hook
-	p.head = Vector3(26 - 8 * f, 0, 0)
-	var up := smoothstep(1.2, 1.9, r)                                         # then stand up to watch it roll
+	# the arm: a pendulum down from the top of the backswing, fastest at the bottom (the ball's moment of leaving the
+	# hand, which the hall shows the ball following), then up into the follow-through, easing to a stop
+	var arm := curve([[0.0, _rel_top], [DOWNSWING, 12.0], [0.62, 150.0]], r)
+	var f := clampf((r - DOWNSWING) / (0.62 - DOWNSWING), 0.0, 1.0)
+	var out := clampf((arm - 12.0) / 138.0, 0.0, 1.0)
+	var open := clampf(-arm / 110.0, 0.0, 1.0)
+	p.sh_r = Vector3(arm, 0, lerpf(2.0, -12.0, out) + 5.0 * open)
+	p.el_r = Vector3(lerpf(4.0, 35.0, smoothstep(0.3, 1.0, f)), spin * 75.0 * (1.0 - 0.5 * f), 0)   # a handshake for hook
+	p.pelvis = Vector3(0, -5.0 * open + 4.0 * out, 0)                                              # hips and shoulders turn through square
+	p.spine = Vector3(-30.0 + 6.0 * out, -13.0 * open + 9.0 * out, -7.0)
+	p.head = Vector3(26.0 - 8.0 * out, 15.0 * open - 8.0 * out, 5.0)
+	var post := smoothstep(0.5, 1.1, r)                         # holding the finish: the trailing leg settles
+	p.hip_r = p.hip_r.lerp(Vector3(-30, 14, 8), post)
+	p.kn_r = p.kn_r.lerp(Vector3(-20, 0, 0), post)
+	var up := smoothstep(1.2, 2.0, r)                           # then stand up to watch it roll
 	if up > 0:
 		var w := p_watch(r)
 		for n in JOINTS: p[n] = p[n].lerp(w[n], up)
@@ -423,9 +472,25 @@ func p_heckle(t: float) -> Dictionary:
 ## "full", "upper" (the legs keep the clip), "arms", "arm_r", or "none" (the clip alone).
 func act(target: Dictionary, dt: float, rate := 12.0, hips_y := 0.0, _mouth := false, clip := "Idle_Loop", mask := "full", speed := 1.0) -> void:
 	_t += dt
-	var k := 1.0 - exp(-rate * dt)
-	for n in JOINTS: pose[n] = pose[n].lerp(target[n], k)
-	lift += (hips_y - lift) * k
+	# each joint is a critically damped spring towards its target: it accelerates and settles smoothly, with no jump
+	# in speed when the target changes course (a plain blend starts moving at full speed the instant it changes).
+	# Solved exactly per step, so it is steady at any frame rate.
+	var w := rate * 1.5
+	if w <= 0.0:
+		for n in JOINTS: _pv[n] = Vector3.ZERO
+		_lv = 0.0
+	else:
+		var ex := exp(-w * dt)
+		for n in JOINTS:
+			var x: Vector3 = pose[n] - target[n]
+			var v: Vector3 = _pv.get(n, Vector3.ZERO)
+			var c := v + x * w
+			pose[n] = target[n] + (x + c * dt) * ex
+			_pv[n] = (v - c * (w * dt)) * ex
+		var lx := lift - hips_y
+		var lc := _lv + lx * w
+		lift = hips_y + (lx + lc * dt) * ex
+		_lv = (_lv - lc * (w * dt)) * ex
 	if clip != _clip:
 		ap.play(clip, 0.35)
 		_clip = clip
@@ -444,8 +509,11 @@ func play(clip: String, dt: float, speed := 1.0) -> void:
 
 ## Snap to a pose with no blending (for a cut, or the first frame).
 func snap(target: Dictionary, hips_y := 0.0, clip := "Idle_Loop", mask := "full") -> void:
-	for n in JOINTS: pose[n] = target[n]
+	for n in JOINTS:
+		pose[n] = target[n]
+		_pv[n] = Vector3.ZERO
 	lift = hips_y
+	_lv = 0.0
 	if clip != _clip:
 		ap.play(clip)
 		_clip = clip

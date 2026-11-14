@@ -12,11 +12,13 @@ func _ready() -> void:
 	var side := false
 	var back := false
 	var only := ""
+	var film := ""
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--out="): out = a.substr(6)
 		if a == "--side": side = true
 		if a == "--back": back = true
 		if a.begins_with("--only="): only = a.substr(7)
+		if a.begins_with("--film="): film = a.substr(7)
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.background_mode = Environment.BG_COLOR
@@ -65,6 +67,9 @@ func _ready() -> void:
 	]
 	for c in ["Idle_Loop", "Idle_Talking_Loop", "Idle_FoldArms_Loop", "Idle_No_Loop", "Yes", "Dance_Loop", "Jump_Loop", "Jump_Start", "Hit_Chest", "Hit_Knockback", "Idle_Rail_Call", "Idle_TalkingPhone_Loop", "Consume", "Interact", "PickUp_Table", "Walk_Carry_Loop", "Sitting_Idle_Loop"]:
 		cfg.append([c, func(b, t): return b.pose, "none", c])
+	if film != "":
+		await _film(film, cam)
+		return
 	var imgs := []
 	if only != "": cfg = cfg.filter(func(c): return c[0] in only.split(","))
 	for c in cfg:
@@ -88,4 +93,47 @@ func _ready() -> void:
 		im.convert(Image.FORMAT_RGBA8)
 		sheet.blit_rect(im, Rect2i(0, 0, w, h), Vector2i((i % cols) * w, (i / cols) * h))
 	sheet.save_png(out)
+	get_tree().quit()
+
+## --film=DIR: play a whole turn the way the hall drives it (hold, approach with the swing, a beat at the top, release,
+## follow-through, stand up) at 30 fps and save every frame, side on, to DIR/f0000.png...
+func _film(dir: String, cam: Camera3D) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	get_viewport().size = Vector2i(640, 480)
+	cam.position = Vector3(3.2, 1.0, 0.6)
+	cam.look_at(Vector3(0, 0.8, 0.3))
+	bw[1].visible = false
+	var b: Bowler = bw[0]
+	b.position = Vector3.ZERO
+	var dt := 1.0 / 30.0
+	var t := 0.0
+	var f := 0
+	var start := 1.0
+	var slide := 0.5
+	while t < 4.6:
+		var hips := 0.0
+		if t < 0.8:
+			b.position.z = start
+			b.act(b.p_hold(b.clock()), dt, 10.0, 0.0, false, "Idle_Loop", "upper")
+		elif t < 1.8:
+			var k := clampf((t - 0.8) / 0.85, 0.0, 1.0)
+			var e := k * k * (3 - 2 * k)
+			b.position.z = lerpf(start, slide, e)
+			hips = -0.17 * smoothstep(0.7, 1.0, k) + Bowler.step_bob(k)
+			b.act(b.p_approach(k, 0.8, 0.0, 0.3), dt, 30.0, hips)
+		else:
+			var r := t - 1.8
+			b.position.z = slide
+			b.act(b.p_release(r, 0.3), dt, 40.0 if r < 0.4 else 10.0, -0.17 * (1.0 - smoothstep(1.2, 2.0, r)))
+		ball.visible = t < 1.8 + Bowler.DOWNSWING
+		if ball.visible: ball.position = b.ball_at_chest() if t < 0.8 else b.ball_in_hand()
+		await RenderingServer.frame_post_draw
+		if not OS.get_cmdline_user_args().has("--nopng"): get_viewport().get_texture().get_image().save_png(dir.path_join("f%04d.png" % f))
+		var hp := b._bone_xform(b._hand_r).origin
+		var pp := b._bone_xform(b._bi.pelvis).origin
+		var lp := b._bone_xform(b.sk.find_bone("foot_l")).origin
+		print("track %d %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f" % [f, hp.x, hp.y, hp.z, pp.x, pp.y, pp.z, lp.x, lp.y, lp.z])
+		f += 1
+		t += dt
+	print("film: ", f, " frames")
 	get_tree().quit()
