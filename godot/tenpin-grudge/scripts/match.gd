@@ -33,6 +33,7 @@ var heckle_t := 0.0
 var heckles := 0
 var hold := 0.0
 var replay_next := false
+var react_from := 99.0                       # seconds into the result when the camera turns to the bowler's reaction
 var rp0 := 0
 var rp_end := 0.0
 var rp_frame = null
@@ -339,6 +340,10 @@ func score(count: int) -> void:
 			text = "Split"
 			sub = "-".join(lane.up.map(func(i): return str(i + 1)))
 	hold = Tune.SHOW_BIG if big or spare else Tune.SHOW_NORMAL
+	react_from = 99.0
+	if not sim and (strike or spare or text == "Gutter" or text == "Split"):     # the big moments get a reaction shot
+		react_from = hold * 0.6
+		hold += Tune.REACT_TIME
 	call = { "t": hold + 0.1, "max": hold + 0.1, "text": text, "sub": sub, "c": p.c }
 	state = "show"; t = 0.0
 	replay_next = strike and not sim and not Store.reduced() and lane.hit and lane.rec.size() > 20

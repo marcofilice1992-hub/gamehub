@@ -28,6 +28,18 @@ var leds: Array = []
 var deck_light: SpotLight3D
 var screen_glow: OmniLight3D
 var cans: Array = []
+var bowlers: Array = []               # the two players' figures, by colour
+var nb_bowlers := {}                  # lane offset -> the neighbour's figure
+var _rel_from := Vector3.ZERO         # where the hand was when the ball left it
+var _show_kind := ""
+const START_D := -1.0                 # where a bowler stands to start their approach (a short one: the camera sits behind it)
+const SLIDE_D := -0.5                 # where the slide ends, just behind the foul line
+const WAIT := Vector3(-1.45, 0.0, 2.9) # the waiting player, by the ball return on the left
+const LOOKS := [
+	{ "skin": "#F2D0B5", "shirt": "#6EA2FF", "panel": "#16234A", "trousers": "#2A2D3A", "shoes": "#2F6BFF", "hair": "quiff", "hair_col": "#3B2A20", "height": 1.03 },
+	{ "skin": "#D9A57E", "shirt": "#F2A93B", "panel": "#3D2410", "trousers": "#2B2630", "shoes": "#E24A3B", "hair": "ponytail", "hair_col": "#6B2E17", "height": 0.97 },
+]
+const NB_HAIR := ["bob", "afro", "beanie", "buzz", "bun", "quiff"]
 var decor: Decor
 var boards := {}                      # lane offset -> { vp, draw, key }
 var racks: MultiMeshInstance3D
@@ -286,6 +298,11 @@ func build(match_node: Match) -> void:
 	decor = Decor.new()
 	add_child(decor)
 	decor.build(lane_shader)
+	for c in 2:                                              # the two players
+		var b := Bowler.new()
+		add_child(b)
+		b.build(LOOKS[c], true)
+		bowlers.append(b)
 	# ---- masking units: the fascia, one screen per lane, the neon sign ----
 	var lanes := 2 * NL + 1
 	_add(_box(PITCH * lanes, 0.98, 0.12), _mat("#08070F", 0.7), 0, 1.13, D + 0.2)
@@ -368,6 +385,14 @@ func build(match_node: Match) -> void:
 		_play(L, 2 + R.randi() % 5)
 		_rack(L, true)
 		_neighbour_board(L)
+		var nbw := Bowler.new()                              # and someone to bowl on it
+		add_child(nbw)
+		nbw.build({ "skin": Bowler.SKINS[(li * 2 + 1) % Bowler.SKINS.size()], "shirt": NEIGHBOUR_COLS[li % NEIGHBOUR_COLS.size()], "panel": "#15131F",
+			"trousers": ["#2A2D3A", "#3A3328", "#1E2733"][li % 3], "shoes": ["#E24A3B", "#2F6BFF", "#20C997"][li % 3], "hair": NB_HAIR[li % NB_HAIR.size()],
+			"hair_col": ["#2B1D14", "#C9A15A", "#121212", "#6B2E17", "#3B2A20", "#8A8A8A"][li % 6], "height": 0.94 + 0.1 * R.randf() }, false)
+		nbw.position = Vector3(n * PITCH - 0.2, 0, 4.5)
+		nbw.set_meta("r", -1.0)
+		nb_bowlers[n] = nbw
 		li += 1
 
 	# ---- the ball: a swirled pearl in each player's colour ----
@@ -399,6 +424,9 @@ func build(match_node: Match) -> void:
 	if not Store.reduced():                                 # start the opening shot from the concourse
 		pos = Vector3(0, 2.4, 11.0)
 		look = Vector3(0, 0.6, -6.0)
+	else:
+		pos = Vector3(0.85, 2.4, 4.4)
+		look = Vector3(0.1, 0.3, -9.0)
 	cam = Camera3D.new()
 	cam.fov = 27.0
 	cam.near = 0.05
@@ -536,6 +564,7 @@ func _neighbours(dt: float) -> void:
 			b.material_override.albedo_color = Color(NEIGHBOUR_COLS[R.randi() % NEIGHBOUR_COLS.size()])
 			b.visible = true
 			L.merge({ "state": "roll", "ball": b, "x": 0.12 + (R.randf() - 0.5) * 0.35, "vx": 0.15 + R.randf() * 0.15, "d": 0.2, "v": 6.8 + R.randf() * 2.2, "t": 0.0 }, true)
+			nb_bowlers[L.n].set_meta("r", 0.0)
 		elif L.state == "roll" or L.state == "fall":
 			L.d += L.v * dt
 			if L.d > 12 and L.state == "roll": L.vx -= 0.5 * dt
@@ -629,7 +658,9 @@ func _process(dt: float) -> void:
 	if m == null: return
 	dt = minf(dt, 0.1)
 	_quality(dt)
-	if tier >= 1: _neighbours(minf(dt, 0.05))
+	if tier >= 1:
+		_neighbours(minf(dt, 0.05))
+		_neighbour_bowlers(minf(dt, 0.05))
 	_display()
 	var st := m.state
 	var c: int = m.cur.c
@@ -665,13 +696,18 @@ func _process(dt: float) -> void:
 			if vis.visible: vis.transform = ln.draw_xform(b)
 	ball.material_override = ball_mats[c]
 	for bm in bumpers: bm.visible = m.assist(m.cur) == 2 and st != "over" and st != "done"
-	if st == "stance" or st == "swing" or st == "intro":
-		var h := minf(1.0, m.sw.t / Tune.POWER_TIME) if st == "swing" else 0.0
-		var e := h * h * (3 - 2 * h)
-		ball.visible = st != "intro"
-		ball.position = Vector3(m.x0, Tune.BR + 0.02 + e * 0.5, -Tune.START + e * 0.55)
-		ball.quaternion = Quaternion(Vector3.RIGHT, -e * 2.2 - 0.6)
+	if not m.call.is_empty() and st == "show":
+		var tx: String = m.call.text
+		_show_kind = "big" if tx in ["Strike", "Turkey"] else "good" if tx == "Spare" else "bad" if tx in ["Gutter", "Split"] or tx.begins_with("0 ") else ""
+	elif st != "replay": _show_kind = ""
+	_bowlers(dt)
+	if st == "stance" or st == "swing" or st == "intro":       # the ball is in the bowler's hands until it is let go
+		var bw: Bowler = bowlers[c]
+		ball.visible = true
+		ball.position = bw.ball_at_chest() if st != "swing" else bw.ball_in_hand()
+		ball.quaternion = Quaternion(Vector3.RIGHT, -0.6)
 		_roll_q = ball.quaternion
+		_rel_from = ball.position
 	elif RF != null:                                        # replay: place the ball from the recording and roll it by how far it moved
 		ball.visible = RF[87] > 0
 		var p := Vector3(RF[80], RF[81], RF[82])
@@ -686,6 +722,8 @@ func _process(dt: float) -> void:
 		ball.visible = b != null and is_instance_valid(b)
 		if ball.visible:
 			ball.position = ln.draw_xform(b).origin
+			if st == "roll" and m.t < 0.09:                     # the first moment out of the hand: blend from the hand to the ball's path
+				ball.position = _rel_from.lerp(ball.position, smoothstep(0.0, 0.09, m.t))
 			var v: Vector3 = b.linear_velocity
 			var sp := Vector2(v.x, v.z).length()
 			if sp > 0.05:
@@ -733,8 +771,16 @@ func _camera(dt: float) -> void:
 	if st == "intro" and not Store.reduced():               # the opening shot: from the concourse, over the ball returns, down to the stance
 		var e := clampf(m.t / 2.0, 0.0, 1.0)
 		e = e * e * (3 - 2 * e)
-		px = 0.0; py = lerpf(2.4, 1.7, e); pz = lerpf(11.0, 4.6, e)
-		lx = 0.0; ly = lerpf(0.6, 0.1, e); lz = -6.0; rate = 30
+		px = lerpf(0.0, m.x0 * 0.5 + 0.85, e); py = 2.4; pz = lerpf(11.0, 4.4, e)
+		lx = lerpf(0.0, m.x0 * 0.25 + 0.1, e); ly = lerpf(0.6, 0.3, e); lz = lerpf(-6.0, -9.0, e); rate = 30
+	elif st == "stance" or st == "swing" or st == "intro":   # behind and above the bowler's right shoulder
+		var k := clampf(m.sw.t / 0.85, 0.0, 1.0) if st == "swing" else 0.0
+		px = m.x0 * 0.5 + 0.85; py = 2.4; pz = lerpf(4.4, 3.9, k * k * (3 - 2 * k))
+		lx = m.x0 * 0.25 + 0.1; ly = 0.3; lz = -9.0; rate = 4.0
+	elif st == "show" and m.t > m.react_from:              # turn round to the bowler for their reaction
+		var bw: Bowler = bowlers[m.cur.c]
+		var bp := bw.global_position
+		px = bp.x + 0.9; py = 1.5; pz = bp.z - 3.3; lx = bp.x - 0.25; ly = 1.2; lz = bp.z + 0.4; rate = 30.0 if m.t - m.react_from < 0.05 else 2.0
 	elif st == "replay":                                       # low inside the lane, pushing in slowly
 		var t := minf(m.t, 6.0)
 		px = 0.5 - t * 0.06; py = 0.3 + t * 0.012; pz = -(Tune.HEAD - 2.8 + t * 0.2)
@@ -767,6 +813,76 @@ func _camera(dt: float) -> void:
 		cam_attr.dof_blur_near_distance = maxf(0.3, focus - 1.6)
 		cam_attr.dof_blur_near_transition = 0.8
 		cam_attr.dof_blur_amount = 0.07 if st == "replay" else 0.04
+
+## The bowlers. The one up stands at the back of the approach holding the ball, walks it in with the swing, slides,
+## lets go and follows through, then reacts to what fell. The other waits by the ball return, heckles, and reacts too.
+func _bowlers(dt: float) -> void:
+	var st := m.state
+	var c: int = m.cur.c
+	var me: Bowler = bowlers[c]
+	var you: Bowler = bowlers[1 - c]
+	var red := Store.reduced()
+	var tt := me.clock()
+	# the bowler who is up
+	var bx := m.x0 - 0.2
+	match st:
+		"intro", "stance":
+			me.position = Vector3(bx, 0, -START_D)
+			me.rotation.y = 0
+			me.act(me.p_hold(tt), dt, 10.0)
+		"swing":
+			var k := clampf(m.sw.t / 0.85, 0.0, 1.0)
+			var e := k * k * (3 - 2 * k)
+			me.position = Vector3(bx, 0, -lerpf(START_D, SLIDE_D, e))
+			var pw := (m.swing_power() - 0.55) / 0.45
+			var tired := clampf((m.sw.t - Tune.TIRE_AFTER) * 0.6, 0.0, 1.0)
+			var bob := -0.035 * absf(sin(k * 3.0 * PI))
+			me.act(me.p_approach(k, pw, tired), dt, 30.0, -0.17 * smoothstep(0.7, 1.0, k) + bob)
+		"roll":
+			me.position = Vector3(bx, 0, -SLIDE_D)
+			me.act(me.p_release(m.t), dt, 40.0 if m.t < 0.1 else 10.0, -0.17 * (1.0 - smoothstep(1.2, 1.9, m.t)))
+		"show", "replay":
+			var kind := _show_kind
+			if kind == "big": me.act(me.p_cheer(tt, true), dt, 10.0, 0.0 if red else absf(sin(tt * 7.0)) * 0.12, true)
+			elif kind == "good": me.act(me.p_cheer(tt, false), dt, 10.0, 0.0, true)
+			elif kind == "bad": me.act(me.p_slump(tt), dt, 6.0)
+			else: me.act(me.p_watch(tt), dt, 6.0)
+		"over", "done":
+			var w := m.won
+			if w < 0: me.act(me.p_watch(tt), dt, 6.0)
+			else:
+				var winner: Bowler = bowlers[m.P[w].c]
+				var loser: Bowler = bowlers[1 - m.P[w].c]
+				winner.act(winner.p_cheer(winner.clock(), true), dt, 10.0, 0.0 if red else absf(sin(winner.clock() * 7.0)) * 0.12, true)
+				loser.act(loser.p_slump(loser.clock()), dt, 6.0)
+				return
+	# the one waiting: by the ball return, half turned to the lane
+	you.position = WAIT
+	you.rotation.y = -0.45
+	var hk := m.heckle
+	if not hk.is_empty() and hk.c == 1 - c: you.act(you.p_heckle(you.clock()), dt, 14.0, 0.0, true)
+	elif (st == "show" or st == "replay") and _show_kind == "big": you.act(you.p_sulk(you.clock()), dt, 6.0)
+	elif (st == "show" or st == "replay") and _show_kind == "bad": you.act(you.p_clap(you.clock()), dt, 10.0, 0.0, true)
+	else: you.act(you.p_idle(you.clock()), dt, 6.0)
+
+## The neighbours: a quick approach as their ball is about to go, a release, then back to waiting.
+func _neighbour_bowlers(dt: float) -> void:
+	for L in nb:
+		var bw: Bowler = nb_bowlers[L.n]
+		var r: float = bw.get_meta("r")
+		var x: float = L.n * PITCH - 0.2
+		if L.state == "idle" and L.t < 0.9:
+			var k := clampf(1.0 - L.t / 0.9, 0.0, 1.0)
+			bw.position = Vector3(x, 0, -lerpf(START_D, SLIDE_D, k * k * (3 - 2 * k)))
+			bw.act(bw.p_approach(k, 0.5, 0.0), dt, 30.0, -0.17 * smoothstep(0.7, 1.0, k))
+		elif r >= 0.0 and r < 3.5:
+			bw.set_meta("r", r + dt)
+			bw.position = Vector3(x, 0, -SLIDE_D)
+			bw.act(bw.p_release(r), dt, 30.0 if r < 0.1 else 8.0, -0.17 * (1.0 - smoothstep(1.2, 1.9, r)))
+		else:
+			if r >= 3.5: bw.set_meta("r", -1.0)
+			bw.position = Vector3(x, 0, 4.5)                     # waiting back on the concourse, out of the bowling camera's way
+			bw.act(bw.p_idle(bw.clock()), dt, 4.0)
 
 ## Graphics tiers, tuned for a mid-range card (an RTX 3060 Ti runs High at 1080p with room to spare):
 ## Low     FSR 1 at 67% scale, FXAA, no screen-space effects, hard shadows, still neighbours
@@ -808,6 +924,7 @@ func apply_tier(t: int) -> void:
 	racks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if tier >= 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	fx.scale_k = [0.4, 0.7, 1.0, 1.0][tier]
 	decor.set_tier(tier)
+	for k in nb_bowlers: nb_bowlers[k].visible = tier >= 1
 	slow_t = 0.0
 
 func _on_fx(kind: String, c: int) -> void:

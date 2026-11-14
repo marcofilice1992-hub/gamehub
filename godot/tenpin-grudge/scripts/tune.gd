@@ -51,6 +51,7 @@ const SETTLE_QUIET := 0.35   # seconds every standing pin must be still before t
 const SETTLE_MAX := 3.2      # seconds after first contact before the count is taken regardless
 const SHOW_NORMAL := 1.25    # seconds a result stays up
 const SHOW_BIG := 1.9        # for strikes and spares
+const REACT_TIME := 1.1    # extra seconds after a strike, spare, split or gutter for the bowler's reaction
 const REPLAY_SPEED := 0.5    # strike replay playback rate
 const REPLAY_LENGTH := 1.5   # seconds of real action shown
 const TURN_LOCK := 0.35      # seconds at the start of a turn when the swing cannot start

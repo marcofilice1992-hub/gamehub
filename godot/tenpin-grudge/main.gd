@@ -92,6 +92,9 @@ func _shots_step() -> void:
 	if key == "roll" and m.t > 1.0: _capture("05-roll")
 	if key == "roll" and m.lane.hit and m.lane.t - m.lane.hit_t > 0.25: _capture("06-impact")
 	if key == "show" and m.t > 0.9: _capture("07-show")
+	if key == "show" and m.t > m.react_from + 0.45: _capture("11-react")
+	if key == "swing" and m.sw.t > 0.38: _capture("12-backswing")
+	if key == "roll" and m.t > 0.25 and m.t < 0.6: _capture("13-release")
 	if key == "replay" and m.t > 1.2: _capture("08-replay")
 	if _only != "":
 		if _saved >= _only.split(",").size() or m.n > 8: get_tree().quit()
