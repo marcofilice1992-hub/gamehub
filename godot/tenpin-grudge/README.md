@@ -26,7 +26,8 @@ or run `godot --path godot/tenpin-grudge`.
 |---|---|---|---|
 | Left stick / D-pad | A D | ← → | Step sideways |
 | LB / RB | 1 / 2 | [ / ] | Aim (tap for a tenth of a degree, hold to sweep) |
-| LT / RT | Shift / F | , / . | Hook |
+| LT / RT | Shift / F | , / . | Hook (set before the shot) |
+| Left stick left/right while swinging | A / D while swinging | ← / → while swinging | Spin: turn the wrist for more (or less) hook |
 | Right stick down, then up | hold Space, let go | hold Enter, let go | Swing, then bowl |
 | B | Q | Backspace | Cancel the swing |
 | Y | R | / | Change ball |

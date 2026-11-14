@@ -93,7 +93,7 @@ func _shots_step() -> void:
 	if key == "roll" and m.lane.hit and m.lane.t - m.lane.hit_t > 0.25: _capture("06-impact")
 	if key == "show" and m.t > 0.9: _capture("07-show")
 	if key == "show" and m.t > m.react_from + 0.45: _capture("11-react")
-	if key == "swing" and m.sw.t > 0.38: _capture("12-backswing")
+	if key == "swing" and m.sw.t > 0.2: _capture("12-backswing")
 	if key == "roll" and m.t > 0.25 and m.t < 0.6: _capture("13-release")
 	if key == "replay" and m.t > 1.2: _capture("08-replay")
 	if _only != "":
@@ -354,8 +354,9 @@ class Front extends Control:
 		var lead = Pads.seats[0] if Pads.seats[0].joined and not Pads.seats[0].bot else Pads.seats[1]
 		var ty: String = lead.type if lead.joined else Pads.last_type
 		Gx.text(self, "How to bowl", 120, 860, { "size": Gx.FS.sm, "weight": 700 })
-		Gx.text(self, "Step with the left stick, aim with LB and RB, set a hook with LT and RT.  Pull the right stick down to swing, push it up to bowl.", 120, 902, { "size": Gx.FS.xs, "color": Tune.MUTED })
-		Gx.text(self, "On a keyboard: hold the bowl key to swing, let go to bowl.  Y changes ball, X heckles while the other player bowls.", 120, 936, { "size": Gx.FS.xs, "color": Tune.MUTED })
+		Gx.text(self, "Step with the left stick, aim with LB and RB, set a hook with LT and RT.  Pull the right stick down to swing, push it up to bowl;", 120, 902, { "size": Gx.FS.xs, "color": Tune.MUTED })
+		Gx.text(self, "turn the left stick while you swing for extra spin.  On a keyboard: hold the bowl key to swing, A/D or arrows to spin, let go to bowl.", 120, 936, { "size": Gx.FS.xs, "color": Tune.MUTED })
+		Gx.text(self, "Y changes ball, X heckles while the other player bowls.", 120, 970, { "size": Gx.FS.xs, "color": Tune.MUTED })
 		if n == 2: Gx.hints(self, 120, 1012, [["start", "Bowl"], ["back", "Quit"]], ty)
 		else: Gx.hints(self, 120, 1012, [["back", "Quit"]], ty)
 

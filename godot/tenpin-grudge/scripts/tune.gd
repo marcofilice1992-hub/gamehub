@@ -29,6 +29,8 @@ const TIRE_AFTER := 1.2      # seconds at the top before power starts to drain
 const TIRE_RATE := 0.2       # power lost per second after that
 const DRIFT := 1.5           # degrees off the aim line at full sideways push on release
 const HOOK_STEPS := [-1.0, -0.6, -0.3, 0.0, 0.3, 0.6, 1.0]
+const TWIST := 0.6           # how much hook a full wrist turn during the swing adds (left stick or A/D)
+const SPIN_MAX := 1.25       # the most spin a ball can carry: a full hook plus a hard turn the same way
 const HOOK_NAMES := ["Strong left", "Medium left", "Light left", "None", "Light right", "Medium right", "Strong right"]
 # Pins and ball. Calibrated with tests/sweep.tscn against the USBC's free-fall pinsetter results (Sept 2021 report):
 # strikes peak above 90% at 6.5-8 cm right of the head pin, and averaged over the pocket they come out at 35, 46, 56

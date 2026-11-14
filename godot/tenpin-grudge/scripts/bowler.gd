@@ -203,7 +203,7 @@ func p_hold(t: float) -> Dictionary:
 
 ## The approach, driven by the swing: three steps to the foul line while the arm swings back to a height that shows
 ## the power (k = 0..1 through the approach; pw = 0..1 of the power range).
-func p_approach(k: float, pw: float, tired: float) -> Dictionary:
+func p_approach(k: float, pw: float, tired: float, turn := 0.0) -> Dictionary:
 	var p := _blank()
 	var e := k * k * (3 - 2 * k)
 	var steps := k * 3.0
@@ -228,7 +228,7 @@ func p_approach(k: float, pw: float, tired: float) -> Dictionary:
 	elif k < 0.5: arm = lerpf(45.0, 0.0, (k - 0.25) / 0.25)
 	else: arm = lerpf(0.0, top, smoothstep(0.5, 0.9, k))
 	p.sh_r = Vector3(arm, 0, 4)
-	p.el_r = Vector3(lerpf(70.0, 4.0, smoothstep(0.0, 0.4, k)), 0, 0)
+	p.el_r = Vector3(lerpf(70.0, 4.0, smoothstep(0.0, 0.4, k)), turn * 70.0, 0)             # the wrist turned for spin
 	p.sh_l = Vector3(lerpf(30.0, 18.0, e), 0, lerpf(18.0, -62.0, e))                   # the balance arm opens out
 	p.el_l = Vector3(lerpf(100.0, 20.0, e), 0, 0)
 	_feet_flat(p)
@@ -236,11 +236,11 @@ func p_approach(k: float, pw: float, tired: float) -> Dictionary:
 	return p
 
 ## The release and follow-through, r seconds after letting go.
-func p_release(r: float) -> Dictionary:
+func p_release(r: float, spin := 0.0) -> Dictionary:
 	var p := p_approach(1.0, 0.6, 0.0)
 	var f := smoothstep(0.0, 0.45, r)
 	p.sh_r = Vector3(lerpf(15.0, 150.0, f), 0, lerpf(2.0, -12.0, f))
-	p.el_r = Vector3(lerpf(4.0, 35.0, f), 0, 0)
+	p.el_r = Vector3(lerpf(4.0, 35.0, f), spin * 75.0 * (1.0 - 0.5 * f), 0)            # the hand comes up the side of the ball: a handshake for hook
 	p.head = Vector3(26 - 8 * f, 0, 0)
 	var up := smoothstep(1.2, 1.9, r)                                         # then stand up to watch it roll
 	if up > 0:

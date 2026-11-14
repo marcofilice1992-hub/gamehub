@@ -727,8 +727,8 @@ func _process(dt: float) -> void:
 			var v: Vector3 = b.linear_velocity
 			var sp := Vector2(v.x, v.z).length()
 			if sp > 0.05:
-				var axis := Vector3(-v.z / sp, -m.spin * 0.5, v.x / sp).normalized()
-				_roll_q = (Quaternion(axis, -sp * dt * ln.pace / Tune.BR) * _roll_q).normalized()
+				var axis := Vector3(-v.z / sp, -m.spin * 0.8, v.x / sp).normalized()            # spin tilts the axis the ball turns on
+				_roll_q = (Quaternion(axis, -sp * dt * ln.pace / Tune.BR * (1.0 + 0.45 * absf(m.spin))) * _roll_q).normalized()   # spin adds revs
 			ball.quaternion = _roll_q
 	# the sweep bar comes down as the pins are cleared, and lifts as the next ball begins
 	var want := (1.0 if m.t > m.hold - 0.55 else 0.0) if st == "show" else (1.0 if st == "stance" and m.t < 0.35 and m.n > 1 else 0.0)
@@ -837,10 +837,10 @@ func _bowlers(dt: float) -> void:
 			var pw := (m.swing_power() - 0.55) / 0.45
 			var tired := clampf((m.sw.t - Tune.TIRE_AFTER) * 0.6, 0.0, 1.0)
 			var bob := -0.035 * absf(sin(k * 3.0 * PI))
-			me.act(me.p_approach(k, pw, tired), dt, 30.0, -0.17 * smoothstep(0.7, 1.0, k) + bob)
+			me.act(me.p_approach(k, pw, tired, m.sw.twist), dt, 30.0, -0.17 * smoothstep(0.7, 1.0, k) + bob)
 		"roll":
 			me.position = Vector3(bx, 0, -SLIDE_D)
-			me.act(me.p_release(m.t), dt, 40.0 if m.t < 0.1 else 10.0, -0.17 * (1.0 - smoothstep(1.2, 1.9, m.t)))
+			me.act(me.p_release(m.t, m.spin), dt, 40.0 if m.t < 0.1 else 10.0, -0.17 * (1.0 - smoothstep(1.2, 1.9, m.t)))
 		"show", "replay":
 			var kind := _show_kind
 			if kind == "big": me.act(me.p_cheer(tt, true), dt, 10.0, 0.0 if red else absf(sin(tt * 7.0)) * 0.12, true)

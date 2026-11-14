@@ -86,6 +86,16 @@ func flow() -> void:
 	await get_tree().process_frame
 	m2.update(1.0 / 60)
 	ok(m2.state == "stance", "B cancels the swing")
+	# spin: the wrist turn adds to the set hook, up to the limit
+	m2.state = "swing"
+	m2.cur.hook = 3
+	m2.sw.twist = 1.0
+	ok(is_equal_approx(m2.spin_now(), Tune.TWIST), "a full turn on a straight ball adds %.2f spin (%.2f)" % [Tune.TWIST, m2.spin_now()])
+	m2.cur.hook = 0
+	m2.sw.twist = -1.0
+	ok(is_equal_approx(m2.spin_now(), -Tune.SPIN_MAX), "a hard turn on a strong hook is capped at %.2f" % Tune.SPIN_MAX)
+	m2.state = "stance"
+	ok(is_equal_approx(m2.spin_now(), -1.0), "outside the swing, spin is just the set hook")
 	m2.queue_free()
 	await get_tree().process_frame
 

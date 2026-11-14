@@ -23,7 +23,7 @@ var fresh := true
 var x0 := 0.0
 var aim := 0.0                               # tenths of a degree, -40..40
 var spin := 0.0
-var sw := { "t": 0.0, "idle": 0.0, "rum": 0.0 }
+var sw := { "t": 0.0, "idle": 0.0, "rum": 0.0, "twist": 0.0 }   # twist: the wrist turn put on during the swing, -1..1
 var armed := false
 var read_text := ""
 var call := {}                               # the big result callout: { t, max, text, sub, c }
@@ -123,7 +123,7 @@ func guide() -> PackedVector2Array:
 	var hk: float = Tune.HOOK * Tune.BALLS[p.ball].hook
 	if state == "stance" or state == "swing":
 		var ang := deg_to_rad(aim / 10.0)
-		var pts := Tune.trace(x0, Tune.START, sin(ang) * 8, cos(ang) * 8, Tune.HOOK_STEPS[p.hook] if a == 2 else 0.0, false, hk, oil.len)
+		var pts := Tune.trace(x0, Tune.START, sin(ang) * 8, cos(ang) * 8, spin_now() if a == 2 else 0.0, false, hk, oil.len)
 		if a == 0:
 			var cut := PackedVector2Array()
 			for q in pts: if q.y <= 4.7: cut.append(q)
@@ -216,11 +216,14 @@ func update(dt: float) -> void:
 		# the swing only starts once the stick has been let go since the turn began, so nothing carries over from the last shot
 		if not armed and t > Tune.TURN_LOCK and (not s.down("a") if key else absf(s.aim.y) < 0.3): armed = true
 		if armed and (s.pressed("a") if key else s.aim.y > 0.6):
-			state = "swing"; sw.t = 0.0; sw.idle = 0.0
+			state = "swing"; sw.t = 0.0; sw.idle = 0.0; sw.twist = 0.0
 		return
 	if state == "swing":
 		var key: bool = s.keyboard
 		sw.t += dt
+		# spin: turn the wrist with the left stick (A/D or the arrow keys) while swinging; it eases in, like a real turn
+		var want: float = clampf(s.move.x, -1.0, 1.0)
+		sw.twist += (want - sw.twist) * (1.0 - exp(-(6.0 if key else 14.0) * dt))
 		if t - sw.rum > 0.12:
 			sw.rum = t
 			s.rumble(0.1 + 0.25 * minf(1.0, sw.t / 0.8), 100, 0.0)
@@ -280,6 +283,18 @@ func update(dt: float) -> void:
 var _was_gutter := false
 var _was_hit := false
 
+## The spin the ball will leave with: the hook set before the shot, plus the wrist turn put on during the swing.
+## Spin bends the ball on the dry boards and keeps it driving through the pins; more than a full hook is possible
+## with a strong turn, at the cost of control.
+func spin_now() -> float:
+	var base: float = Tune.HOOK_STEPS[cur.hook] if not cur.is_empty() else 0.0
+	var tw: float = sw.twist if state == "swing" else 0.0
+	return clampf(base + Tune.TWIST * tw, -Tune.SPIN_MAX, Tune.SPIN_MAX)
+
+## Revolutions a minute, for the display: a straight ball still rolls end over end; spin adds revs.
+func rpm(sp: float) -> int:
+	return int(round((140.0 + 330.0 * absf(sp) / Tune.SPIN_MAX) / 10.0)) * 10
+
 func swing_power() -> float:
 	var floor_pw := 0.7 if assist(cur) == 2 else 0.55
 	var pw := 0.55 + 0.45 * minf(1.0, sw.t / Tune.POWER_TIME)
@@ -296,7 +311,7 @@ func release(drift: float) -> void:
 	p.x0 = x0; p.aim = aim; p.fast = maxf(p.fast, v * 3.6)
 	power = pw; kmh = v * 3.6
 	lane.bowl(x0, ang, v, a == 2, bl)
-	spin = Tune.HOOK_STEPS[p.hook]
+	spin = spin_now()
 	lane.spin = spin
 	_was_gutter = false; _was_hit = false
 	p.balls += 1
@@ -461,6 +476,7 @@ func bot(seat) -> void:
 			if b.flip: buttons["rb" if da > 0 else "lb"] = 1.0
 		elif t > b.wait and absf(dx) <= 0.003: ctl.ay = 1.0
 	elif state == "swing":
+		if quick: ctl.x = -0.8                               # screenshot runs: show some wrist turn on the spin meter
 		if sw.t < p.plan.hold: ctl.ay = 1.0
 		else:
 			ctl.ay = -1.0

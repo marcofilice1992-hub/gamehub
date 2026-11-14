@@ -109,16 +109,16 @@ func _draw() -> void:
 		var hx := W - 60 - 660
 		Gx.panel(self, hx, y, 660, 186)
 		var rows: Array
-		if st == "swing": rows = [[["a" if key else "aim", "Let go to bowl" if key else "Push forward to bowl, straight"]], [["b", "Cancel the swing"]]]
+		if st == "swing": rows = [[["a" if key else "aim", "Let go to bowl" if key else "Push forward to bowl, straight"]], [["move", "Turn for spin"], ["b", "Cancel the swing"]]]
 		else: rows = [[["move", "Step sideways"], ["a" if key else "aim", "Hold to swing" if key else "Pull back to swing"]], [["lb", "Aim left"], ["rb", "Aim right"]], [["lt", "Hook left"], ["rt", "Hook right"], ["y", "Ball"]]]
 		for i in rows.size(): Gx.hints(self, hx + 30, y + 44 + i * 50, rows[i], ty)
 	if st == "swing":                                        # swing height, with the floor and the top marked, and the drift needle
 		var floor_pw := 0.7 if m.assist(p) == 2 else 0.55
 		var pw := m.swing_power()
 		var x := W - 230
-		var y := 380.0
+		var y := 300.0
 		var h := 330.0
-		Gx.panel(self, x - 34, y - 62, 196, h + 150)
+		Gx.panel(self, x - 34, y - 62, 196, h + 250)
 		Gx.eyebrow(self, "Power", x - 10, y - 26)
 		Gx.rrect(self, x, y, 34, h, 8, Gx.S3)
 		var fh := h * (pw - 0.5) / 0.5
@@ -131,16 +131,28 @@ func _draw() -> void:
 		Gx.rrect(self, x - 10, y + h + 54, 150, 10, 5, Gx.S3)
 		Gx.line(self, x + 65, y + h + 48, x + 65, y + h + 70, Tune.MUTED, 2)
 		Gx.circle(self, x + 65 + clampf(dr, -1, 1) * 70, y + h + 59, 9, Tune.GOOD if absf(dr) < 0.12 else Tune.BAD)
+		# spin: the set hook as a tick, the wrist turn on top of it as the bar, and the revs it will carry
+		var sp := m.spin_now()
+		var base: float = Tune.HOOK_STEPS[p.hook]
+		var sy := y + h + 128
+		Gx.eyebrow(self, "Spin", x - 10, sy - 14)
+		Gx.rrect(self, x - 10, sy, 150, 10, 5, Gx.S3)
+		var cx := x + 65
+		var bx := cx + sp / Tune.SPIN_MAX * 75
+		Gx.rrect(self, minf(cx, bx), sy, absf(bx - cx), 10, 5, col)
+		Gx.line(self, cx, sy - 6, cx, sy + 16, Tune.MUTED, 2)
+		Gx.line(self, cx + base / Tune.SPIN_MAX * 75, sy - 6, cx + base / Tune.SPIN_MAX * 75, sy + 16, Tune.TEXT, 2)
+		Gx.text(self, "%d rpm %s" % [m.rpm(sp), "left" if sp < -0.05 else "right" if sp > 0.05 else ""], x + 65, sy + 44, { "size": Gx.FS.xs, "weight": 700, "mono": true, "align": "center" })
 	if st == "roll":
 		var x := 60.0
 		var y := H - 132
 		var ln := m.lane
 		var what := "In the gutter" if ln.gutter else "Counting pins" if ln.hit else "Rolling straight" if m.spin == 0.0 \
 			else ("Hooking " + ("left" if m.spin < 0 else "right")) if ln.ball and Tune.grip(-ln.ball.position.z, m.oil.len) > 0.5 else "Skidding on the oil"
-		Gx.panel(self, x, y, 640, 100)
+		Gx.panel(self, x, y, 780, 100)
 		Gx.marker(self, p.c, x + 36, y + 50, 11)
 		Gx.eyebrow(self, Tune.NAMES[p.c] + " · " + what, x + 60, y + 58, { "color": col })
-		Gx.text(self, "%d km/h" % int(round(m.kmh)), x + 612, y + 62, { "size": Gx.FS.sm, "weight": 700, "mono": true, "align": "right" })
+		Gx.text(self, "%d km/h · %d rpm" % [int(round(m.kmh)), m.rpm(m.spin)], x + 752, y + 62, { "size": Gx.FS.sm, "weight": 700, "mono": true, "align": "right" })
 	var b := m.banner
 	if not b.is_empty() and st != "intro":
 		var a := clampf(minf(b.t / 0.3, (1.6 - b.t) / 0.2), 0, 1)
